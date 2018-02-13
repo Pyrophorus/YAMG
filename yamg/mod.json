@@ -1,0 +1,8 @@
+{
+    "name": "yamg",
+    "version": "0.3",
+    "label": "Yet another map generator",
+    "description": "This mod adds the yamg library and a random map script named Egyptian Oasis.",
+    "dependencies": ["0ad=0.0.22"]
+}
+

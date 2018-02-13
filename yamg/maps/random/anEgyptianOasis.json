@@ -1,0 +1,12 @@
+{
+	"settings" : {
+		"Name" : "An Egyptian oasis",
+		"Script" : "anEgyptianOasis.js",
+		"Description" : "An Egyptian oasis.",
+		"BaseTerrain" : ["medit_dirt"],
+		"BaseHeight" : 1,
+		"Keywords": ["new", "demo"],
+		"Preview" : "",
+		"CircularMap" : true
+	}
+}
