@@ -35,26 +35,34 @@ function FractalPainter(area,centerHeight,bump,rough,progress) {
  * The legacy method of the painter.
  *
  * @param nochiasm : this boolean states if chiasms will be generated (i.e. part of the region lower than their initial value).
- * @param type : special terrain will be generated, for instance mesas
-
+ * 
  */
-FractalPainter.prototype.paint = function(nochiasm = true, type = "none") {
+FractalPainter.prototype.paint = function(nochiasm = true) {
+
+	// convert PointXZ to Vector2D if needed
+	let pt = this.region[0];
 	
+	if(pt.z != undefined) {
+		let tmp = [];
+		for(let p of this.region)
+			tmp.push({x:p.x,y:p.z});
+		this.region = tmp;
+		tmp = null;
+	}
+
 	// 1- find the bounding box of the area
 	let xmin = 64000; let ymin = 64000; let xmax = 0; let ymax = 0;
-	let length = this.region.length;
 
-	for (let i=0; i < length; i++)
+	for (let pt of this.region)
 	{
-		let pt = this.region[i];
 		if(pt.x > xmax)
 			xmax = pt.x;
-		if(pt.z > ymax)
-			ymax = pt.z;
+		if(pt.y > ymax)
+			ymax = pt.y;
 		if(pt.x < xmin)
 			xmin = pt.x;
-		if(pt.z < ymin)
-			ymin = pt.z;
+		if(pt.y < ymin)
+			ymin = pt.y;
 		
 	}
 
@@ -62,10 +70,11 @@ FractalPainter.prototype.paint = function(nochiasm = true, type = "none") {
 	let edge_x = (xmax - xmin);
 	let edge_y = (ymax - ymin);
 
-	let edge = ( edge_x >  edge_y) ? edge_x : edge_y;
+	let edge = (edge_x  >  edge_y) ? edge_x : edge_y;
 	while(this.mSize < edge)
 		this.mSize *= 2;
 	
+
 	let depx = Math.round((this.mSize - edge_x) / 2);
 	let depy = Math.round((this.mSize - edge_y) / 2);
 	
@@ -91,11 +100,10 @@ FractalPainter.prototype.paint = function(nochiasm = true, type = "none") {
 	
 	
 	// 4 - erase the area in the temporary map
-	for (let i=0; i < length; i++)
+	for (let pt of this.region)
 	{
-		let pt = this.region[i];
 		let xg = pt.x - depx;
-		let yg = pt.z - depy;
+		let yg = pt.y - depy;
 		this.tMap[xg][yg] = UNDEFALT;
 	}
 	
@@ -114,14 +122,13 @@ FractalPainter.prototype.paint = function(nochiasm = true, type = "none") {
 	this.createAltitudes(0, this.mSize, 0, this.mSize, this.bump, this.rough, this.progress);
 	
 	// 6 - back to the g_Map
-	for (let i=0; i < length; i++)
+	for (let pt of this.region)
 	{
-		let pt = this.region[i];
 		let xg = pt.x - depx;
-		let yg = pt.z - depy;
-		if(nochiasm && (g_Map.height[pt.x][pt.z] > this.tMap[xg][yg]))
+		let yg = pt.y - depy;
+		if(nochiasm && (g_Map.height[pt.x][pt.y] > this.tMap[xg][yg]))
 			continue;
-		g_Map.height[pt.x][pt.z] = this.tMap[xg][yg];
+		g_Map.height[pt.x][pt.y] = this.tMap[xg][yg];
 	}
 	
 }
@@ -339,7 +346,6 @@ HeightArray.prototype.fullMap = function (tRough,tBump,baselevel,seaRatio,mountR
 				if((d1 + d2) <= rad2) {
 					let idx = Math.round(this.tMap[i][j] * 10);
 					this.histo[idx]++;
-					test++;
 				}
 			}
 		}
@@ -350,7 +356,6 @@ HeightArray.prototype.fullMap = function (tRough,tBump,baselevel,seaRatio,mountR
 			{
 				let idx = Math.round(this.tMap[i][j] * 10);
 				this.histo[idx]++;
-				test++;
 			}
 		}
 	}
@@ -407,7 +412,6 @@ HeightArray.prototype.fullMap = function (tRough,tBump,baselevel,seaRatio,mountR
 				if((d1 + d2) <= rad2) {
 					let idx = Math.round(this.tMap[i][j] * 10);
 					this.histo[idx]++;
-					test++;
 				}
 			}
 		}
@@ -418,7 +422,6 @@ HeightArray.prototype.fullMap = function (tRough,tBump,baselevel,seaRatio,mountR
 			{
 				let idx = Math.round(this.tMap[i][j] * 10);
 				this.histo[idx]++;
-				test++;
 			}
 		}		
 	}
