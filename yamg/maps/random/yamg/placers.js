@@ -48,9 +48,9 @@ function pointsToZone(points)
 {
 	let zone = [];
 	for(let p of points) {
-		zone.push(g_TOMap.gCells(p.x,p.z)); // change this to zone.push(g_TOMap.gCells(p.x,p.y)); if Vector2D is preferred.
+		zone.push(g_TOMap.gCells[p.x][p.z]); // change this to zone.push(g_TOMap.gCells[p.x][p.y]); if Vector2D is preferred.
 	}
-	return points;
+	return zone;
 }
 
 /**
