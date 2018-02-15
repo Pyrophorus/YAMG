@@ -205,8 +205,7 @@ TileObjectMap.prototype.getZoneAlt = function(altmin,altmax,type,mask = 0) {
  * 
  */
 TileObjectMap.prototype.paintMap = function() {
-	for (var ix = 0; ix < mapSize; ix++)
-	{
+	for (var ix = 0; ix < mapSize; ix++) {
 		for (var iz = 0; iz < mapSize; iz++)
 		{
 			switch(this.gCells[ix][iz].terrain) {
@@ -324,8 +323,10 @@ function crossMountains(ti) {
 			prev = r;
 			r = r.road;
 		}
-		recalcTile(r);
-		r.back = prev;
+		if(r != undefined) {
+			recalcTile(r);
+			r.back = prev;
+		}
 	} else {
 		r = ti;
 		prev = ti.back;
@@ -524,19 +525,42 @@ TileObjectMap.prototype.findPlayersBases = function() {
 	for(let p of patches){
 		fields = fields.concat(p.zone);
 	}
-	
+
 	// try to eliminate bases too close from water or mountains
+	const marge = 10;
 	var nRem = patches.length - numPlayers;
 	let i = 0;
 	while((i < patches.length) && (nRem > 0)) {
 		let fx = patches[i].barx;
 		let fy = patches[i].bary;
-		if((this.gCells[fx][fy].alt < waterHeight + 4) || (this.gCells[fx][fy].alt > (hMini - 2))) {
+		if(this.gCells[fx][fy].alt < waterHeight + 5) {
 			patches.splice(i,1);
-		} else
-			i++;
+		} else {
+			fx -= marge; // try to find if there are mountains (or map boundaries) around
+			fy -= marge;
+			if((fx < 0) || (fy < 0)) {
+				patches.splice(i,1);
+				continue;
+			}
+			if(((fx + 2 * marge) > mapSize ) || ( (fy + 2 * marge) > mapSize)) {
+				patches.splice(i,1);
+				continue;
+			}
+			let flag = true;
+			for(let i = fx; i < fx + 2 * marge;i++)
+				for(let j = fy; j < fy + 2 * marge; j++) {
+					if ( (this.gCells[i][j].terrain == "wildm") || (this.gCells[i][j].terrain == "cliffm") ) {
+						flag = false;
+						break;
+					}
+				}
+			if(flag)
+				i++;
+			else
+				patches.splice(i,1);
+		}	
 	}
-	
+
 	// remove unnecessary bases if we have more than players (hopefully !)
 	if((patches.length > numPlayers)) {
 		nRem = patches.length - numPlayers;
