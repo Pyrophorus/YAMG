@@ -201,48 +201,6 @@ TileObjectMap.prototype.getZoneAlt = function(altmin,altmax,type,mask = 0) {
 }
 
 /**
- * Paint terrain according to 'terrain' member.
- * 
- */
-TileObjectMap.prototype.paintMap = function() {
-	for (var ix = 0; ix < mapSize; ix++) {
-		for (var iz = 0; iz < mapSize; iz++)
-		{
-			switch(this.gCells[ix][iz].terrain) {
-				case 'wild':
-					placeTerrain(ix, iz, tWild);
-					break;
-				case 'wildm':
-					placeTerrain(ix, iz, tWildm);
-					break;
-				case 'cliff':
-				case 'cliffm':
-					placeTerrain(ix, iz, tCliff);
-					break;
-				case 'field':
-					placeTerrain(ix, iz, tField);
-					break;
-				case 'water':
-					placeTerrain(ix, iz, tWater);
-					break;
-				case 'infl':
-					placeTerrain(ix, iz, tInfl);
-					break;
-				case 'road':
-					placeTerrain(ix, iz, tRoad);
-					break;
-				case 'road2':
-					placeTerrain(ix, iz, tRoad2);
-					break;
-				default:
-					placeTerrain(ix, iz, "cave_walls");
-					break;
-			}
-		}
-	}	
-}
-
-/**
  * Count the number of unlocked cells.
  * @returns the number
  */
