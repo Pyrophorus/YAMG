@@ -10,6 +10,29 @@ RMS.LoadLibrary("rmgen");
 RMS.LoadLibrary("heightmap");
 RMS.LoadLibrary("yamg");
 
+//========= terrains
+
+const tWild = ["desert_sand_stones", "desert_sand_smooth", "desert_sand_smooth_b", "desert_lakebed_dry_b", "desert_lakebed_dry", "desert_dirt_rough", "desert_plants_b", "desert_grass_a_sand"];
+const tWildm = ["desert_sand_scrub", "desert_sand_smooth", "desert_sand_smooth_b"];
+const tField = ["desert_grass_a_sand", "desert_grass_a_sand", "desert_grass_a_stones", "desert_plants_b"];
+const tCliff = ["desert_cliff_egypt_1", "desert_cliff_egypt_2", "desert_cliff_3_dirty","desert_cliff_base"];
+const tInfl = ["tropic_plants_c", "tropic_plants_b", "tropic_plants", "tropic_grass_plants"];
+const treeFloor = ["tropic_forestfloor_a","savanna_forestfloor_a"]; // the ground in the forest
+const treeList = ["gaia/flora_tree_acacia", "gaia/flora_tree_tamarix", "gaia/flora_tree_carob", "gaia/flora_tree_date_palm", "gaia/flora_tree_aleppo_pine"];
+const tWater = ["desert_sand_wet"];
+const tBase = "desert_city_tile_plaza";
+const tRoad = "desert_city_tile";
+
+const oPine = "gaia/flora_tree_cretan_date_palm_short";
+const oBerryBush = "gaia/flora_tree_olive";
+const aGrassShort = "actor|props/flora/grass_soft_large.xml";
+
+const oStoneLarge = "gaia/geology_stonemine_desert_quarry";
+const oBadGeol = ["gaia/geology_stonemine_desert_badlands_quarry","gaia/geology_metal_desert_badlands_slabs"];
+const oStoneSmall = "gaia/geology_stone_tropic_a";
+const oMetalLarge = "gaia/geology_metal_desert_slabs";
+const oAnimals = ["gaia/fauna_camel","gaia/fauna_elephant_north_african"];
+const gateList = ["gaia/flora_bush_badlands","gaia/flora_bush_badlands","gaia/flora_tree_poplar_lombardy","gaia/flora_tree_senegal_date_palm"];
 
 //=========== standard map initialization ============
 InitMap();
@@ -17,6 +40,16 @@ InitMap();
 var numPlayers = getNumPlayers();
 var mapSize = getMapSize();
 
+/**
+ * This loop is needed because some maps may be unplayble because
+ * 	- we can't find the requested players number bases
+ * 	- some parts are unreachable from elsewhere
+ * 
+ * Since it's very unlikely to happen, the noMore limit should never be reached.
+ */
+
+var noMore = 5;
+do {
 // =========== Create a new height map ============
 
 var hMap = new HeightArray(mapSize);
@@ -36,10 +69,6 @@ setWaterHeight(waterHeight - MIN_HEIGHT);
 //----------- end morphing section -----------
 var g_TOMap = createTileMap(waterHeight + 0.5,snowLimit); // creates the cells map object.
 
-let res2 = g_TOMap.findPlayersBases();
-var patches = res2[0];
-var fields = res2[1];
-
 //=============== filling section ==============
 
 // we have now two regions: the 'monts' holding the mountaneous part of the map
@@ -53,13 +82,17 @@ for(let i = 0; i < monts.length; i++) {
 	}
 }
 
+let res2 = g_TOMap.findPlayersBases();
+var patches = res2[0];
+var fields = res2[1];
+
 // the wild part of the map
 var zone = g_TOMap.getZoneAlt(waterHeight+1,32000,"wild",0);
 g_TOMap.applyTerrainType("wild",yFORESTLOCK,zone);
 
 // and the fields, holding more or less 70% of flat terrain (water excluded)
 g_TOMap.applyTerrainType("field",0,fields);
-// players bases and influence area are marked as "infl".place Except players default starting resources and unit, nothing will be  placed here
+// players bases and influence area are marked as "infl". Except players default starting resources and unit, nothing will be  placed here
 for(let p of patches) {
 	g_TOMap.applyTerrainType("infl",yFORESTLOCK,p.zone);
 }
@@ -74,40 +107,58 @@ for(let p of patches) {
 	endpoints.push(g_TOMap.gCells[p.barx][p.bary]);
 }
 
-if(g_TOMap.buildRoads(endpoints) > 1)
-	warn("Some parts of this map are unreachable to all players.");
+var nets = g_TOMap.buildRoads(endpoints);
 
-// ========= painting the map...
-
-var tWild = ["desert_sand_stones", "desert_sand_smooth", "desert_sand_smooth_b", "desert_lakebed_dry_b", "desert_lakebed_dry", "desert_dirt_rough", "desert_plants_b", "desert_grass_a_sand"];
-var tWildm = ["desert_sand_scrub", "desert_sand_smooth", "desert_sand_smooth_b"];
-var tField = ["desert_grass_a_sand", "desert_grass_a_sand", "desert_grass_a_stones", "desert_plants_b"];
-var tCliff = ["desert_cliff_egypt_1", "desert_cliff_egypt_2", "desert_cliff_3_dirty","desert_cliff_base"];
-var tInfl = ["tropic_plants_c", "tropic_plants_b", "tropic_plants", "tropic_grass_plants"];
-var treeFloor = ["tropic_forestfloor_a","savanna_forestfloor_a"]; // the ground in the forest
-var treeList = ["gaia/flora_tree_acacia", "gaia/flora_tree_tamarix", "gaia/flora_tree_carob", "gaia/flora_tree_date_palm", "gaia/flora_tree_aleppo_pine"];
-var tWater = ["desert_sand_wet"];
-var tBase = "desert_city_tile_plaza";
-var tRoad = "desert_city_tile"; //;"temp_road_broken"
-
-var oPine = "gaia/flora_tree_cretan_date_palm_short";
-var oBerryBush = "gaia/flora_tree_olive";
-var aGrassShort = "actor|props/flora/grass_soft_large.xml";
-
-var oStoneLarge = "gaia/geology_stonemine_desert_quarry";
-var oBadGeol = ["gaia/geology_stonemine_desert_badlands_quarry","gaia/geology_metal_desert_badlands_slabs"];
-var oStoneSmall = "gaia/geology_stone_tropic_a";
-var oMetalLarge = "gaia/geology_metal_desert_slabs";
-var oAnimals = ["gaia/fauna_camel","gaia/fauna_elephant_north_african"];
-var gateList = ["gaia/flora_bush_badlands","gaia/flora_bush_badlands","gaia/flora_tree_poplar_lombardy","gaia/flora_tree_senegal_date_palm"];
+// ========= end retry loop.
+} while((--noMore > 0) && (patches.length < numPlayers) && (nets > 1));
 
 
-g_TOMap.paintMap();
+/**
+ * Paint terrain according to 'terrain' member.
+ * 
+ */
+for (let ix = 0; ix < mapSize; ix++) {
+	for (let iz = 0; iz < mapSize; iz++)
+	{
+		switch(g_TOMap.gCells[ix][iz].terrain) {
+			case 'wild':
+				placeTerrain(ix, iz, tWild);
+				break;
+			case 'wildm':
+				placeTerrain(ix, iz, tWildm);
+				break;
+			case 'cliff':
+			case 'cliffm':
+				placeTerrain(ix, iz, tCliff);
+				break;
+			case 'field':
+				placeTerrain(ix, iz, tField);
+				break;
+			case 'water':
+				placeTerrain(ix, iz, tWater);
+				break;
+			case 'infl':
+				placeTerrain(ix, iz, tInfl);
+				break;
+			case 'road':
+				placeTerrain(ix, iz, tRoad);
+				break;
+			case 'road2':
+				placeTerrain(ix, iz, tRoad2);
+				break;
+			default:
+				placeTerrain(ix, iz, "cave_walls");
+				break;
+		}
+	}
+}	
+
 setWaterType("lake");
 
 
 // ============================= objects ==========================
 g_TOMap.clearDoneFlag();
+
 
 // ==================== setting players bases ====================
 //randomize player order
@@ -196,7 +247,7 @@ for (var i = 0; i < numPlayers; i++)
 
 }
 
-//TileObjectMap.prototype.getZoneAlt = function(altmin,altmax,type,mask = 0)
+
 // ------------- Palms and bushes around the influence zone
 for(let p of patches){
 	for(let cell of p.border){
