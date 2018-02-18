@@ -13,6 +13,9 @@ const yHISTOSIZE = 10000;
 /**
  * The fractal painter is a compatible rmgen painter and can be created an used without special initialization.
  * It modifies a region of the map according to parameters. It can be used to create mountains but to soften the terrain too.
+ * It creates a temporary fractal map encompassing the region to modify. Next, this temporary map is melt with the main map.
+ * 
+ * It cames in four flavors which differ only in the way the temporary fractal map is merged into the exisiting map.
  * 
  * @param area : the area to be modified (a PointXZ array)
  * @param centerHeight : the desired height of the center of the region
@@ -20,8 +23,12 @@ const yHISTOSIZE = 10000;
  * @param rough : defines how chaotic the terrain will be.
  * @param progress : defines how chaotic the region will be.
  * @returns : a fractal painter object
+ * 
+ * This is the abstract class, from which all others inherit. Don't instantiate it, it does nothing visible and has no paint method.
  */
-function FractalPainter(area,centerHeight,bump,rough,progress) {
+
+
+function AbstractFractalPainter(area,centerHeight,bump,rough,progress) {
 	this.region = area;
 	this.centerHeight = centerHeight;
 	this.bump = bump;
@@ -31,95 +38,165 @@ function FractalPainter(area,centerHeight,bump,rough,progress) {
 	this.mSize = 64;
 }
 
-/**
- * The legacy method of the painter.
- *
- * @param nochiasm : this boolean states if chiasms will be generated (i.e. part of the region lower than their initial value).
- * 
- */
-FractalPainter.prototype.paint = function(nochiasm = true) {
-
-	// convert PointXZ to Vector2D if needed
-	let pt = this.region[0];
-	
-	if(pt.z != undefined) {
-		let tmp = [];
-		for(let p of this.region)
-			tmp.push({x:p.x,y:p.z});
-		this.region = tmp;
-		tmp = null;
-	}
-
-	// 1- find the bounding box of the area
-	let xmin = 64000; let ymin = 64000; let xmax = 0; let ymax = 0;
-
-	for (let pt of this.region)
-	{
-		if(pt.x > xmax)
-			xmax = pt.x;
-		if(pt.y > ymax)
-			ymax = pt.y;
-		if(pt.x < xmin)
-			xmin = pt.x;
-		if(pt.y < ymin)
-			ymin = pt.y;
+AbstractFractalPainter.prototype = {
+	maps: function() {
+		// convert PointXZ to Vector2D if needed
+		let pt = this.region[0];
 		
-	}
-
-	// 2 - create the temporary map
-	let edge_x = (xmax - xmin);
-	let edge_y = (ymax - ymin);
-
-	let edge = (edge_x  >  edge_y) ? edge_x : edge_y;
-	while(this.mSize < edge)
-		this.mSize *= 2;
-	
-
-	let depx = Math.round((this.mSize - edge_x) / 2);
-	let depy = Math.round((this.mSize - edge_y) / 2);
-	
-	depx = xmin - depx;
-	depy = ymin - depy;
-	
-	// 3 - copy g_Map into temporary map
-	this.mSize++;
-	for (let i = 0; i < this.mSize; i++)
-	{
-		this.tMap[i] = new Float32Array(this.mSize);
-		let xg = i + depx; 
-		for (let j = 0; j < this.mSize; j++)
-		{
-			let yg = j + depy;
-			if( (xg >= 0) && (yg >= 0) && (xg < mapSize) && (yg < mapSize))
-				this.tMap[i][j] = g_Map.height[xg][yg];
-			else
-				this.tMap[i][j] = UNDEFALT;
+		if(pt.z != undefined) {
+			let tmp = [];
+			for(let p of this.region)
+				tmp.push({x:p.x,y:p.z});
+			this.region = tmp;
+			tmp = null;
 		}
-	}
-	this.mSize--;
-	
-	
-	// 4 - erase the area in the temporary map
-	for (let pt of this.region)
-	{
-		let xg = pt.x - depx;
-		let yg = pt.y - depy;
-		this.tMap[xg][yg] = UNDEFALT;
-	}
-	
-	// 5 - set the corner points height if unknown
-	this.tMap[this.mSize/2][this.mSize/2] = this.centerHeight;
-	
-	if(this.tMap[0][0] == UNDEFALT)
-		this.tMap[0][0] = this.centerHeight;
-	if(this.tMap[this.mSize][0] == UNDEFALT)
-		this.tMap[this.mSize][0] = this.centerHeight;
-	if(this.tMap[0][this.mSize] == UNDEFALT)
-		this.tMap[0][this.mSize] = this.centerHeight;
-	if(this.tMap[this.mSize][this.mSize] == UNDEFALT)
-		this.tMap[this.mSize][this.mSize] = this.centerHeight;
 
-	this.createAltitudes(0, this.mSize, 0, this.mSize, this.bump, this.rough, this.progress);
+		// 1- find the bounding box of the area
+		let xmin = 64000; let ymin = 64000; let xmax = 0; let ymax = 0;
+
+		for (let pt of this.region)
+		{
+			if(pt.x > xmax)
+				xmax = pt.x;
+			if(pt.y > ymax)
+				ymax = pt.y;
+			if(pt.x < xmin)
+				xmin = pt.x;
+			if(pt.y < ymin)
+				ymin = pt.y;
+			
+		}
+
+		// 2 - create the temporary map
+		let edge_x = (xmax - xmin);
+		let edge_y = (ymax - ymin);
+
+		let edge = (edge_x  >  edge_y) ? edge_x : edge_y;
+		while(this.mSize < edge)
+			this.mSize *= 2;
+		
+
+		let depx = Math.round((this.mSize - edge_x) / 2);
+		let depy = Math.round((this.mSize - edge_y) / 2);
+		
+		depx = xmin - depx;
+		depy = ymin - depy;
+		
+		// 3 - copy g_Map into temporary map
+		this.mSize++;
+		for (let i = 0; i < this.mSize; i++)
+		{
+			this.tMap[i] = new Float32Array(this.mSize);
+			let xg = i + depx; 
+			for (let j = 0; j < this.mSize; j++)
+			{
+				let yg = j + depy;
+				if( (xg >= 0) && (yg >= 0) && (xg < mapSize) && (yg < mapSize))
+					this.tMap[i][j] = g_Map.height[xg][yg];
+				else
+					this.tMap[i][j] = UNDEFALT;
+			}
+		}
+		this.mSize--;
+		
+		
+		// 4 - erase the area in the temporary map
+		for (let pt of this.region)
+		{
+			let xg = pt.x - depx;
+			let yg = pt.y - depy;
+			this.tMap[xg][yg] = UNDEFALT;
+		}
+		
+		// 5 - set the corner points height if unknown
+		this.tMap[this.mSize/2][this.mSize/2] = this.centerHeight;
+		
+		if(this.tMap[0][0] == UNDEFALT)
+			this.tMap[0][0] = this.centerHeight;
+		if(this.tMap[this.mSize][0] == UNDEFALT)
+			this.tMap[this.mSize][0] = this.centerHeight;
+		if(this.tMap[0][this.mSize] == UNDEFALT)
+			this.tMap[0][this.mSize] = this.centerHeight;
+		if(this.tMap[this.mSize][this.mSize] == UNDEFALT)
+			this.tMap[this.mSize][this.mSize] = this.centerHeight;
+
+		this.createAltitudes(0, this.mSize, 0, this.mSize, this.bump, this.rough, this.progress);
+		return [depx,depy];
+				
+	},
+	createAltitudes: function(x, xm, y, ym, noise, tRough, tProgress) {
+			
+		let px = (xm - x)/2;
+		let off = px *  noise * tRough * 2 / this.mSize;
+
+		let o2 = off / 2;
+		let h = 0.1;
+		
+		if(this.tMap[x+px][y] <= UNDEFALT) {
+			h = this.tMap[x][y] + (this.tMap[xm][y] -  this.tMap[x][y]) / 2  + (Math.random() * off) - o2;
+			this.tMap[x+px][y] = (h <= 0 ? 0.1:h);
+		}
+
+		if(this.tMap[x][y+px] <= UNDEFALT) {
+			h = this.tMap[x][ym] + (this.tMap[x][y] -  this.tMap[x][ym]) / 2  + (Math.random() * off) - o2;
+			this.tMap[x][y+px] = (h <= 0 ? 0.1:h);
+		}
+
+		if(this.tMap[xm][y+px] <= UNDEFALT) {
+			h = this.tMap[xm][y] + (this.tMap[xm][ym] -  this.tMap[xm][y]) / 2  + (Math.random() * off) - o2;
+			this.tMap[xm][y+px] = (h <= 0 ? 0.1:h);
+		}
+
+		if(this.tMap[x+px][ym] <= UNDEFALT) {
+			h = this.tMap[xm][ym] + (this.tMap[x][ym] -  this.tMap[xm][ym]) / 2  + (Math.random() * off) - o2;
+			this.tMap[x+px][ym] = (h <= 0 ? 0.1:h);
+		}
+
+		if(this.tMap[x+px][y+px] <= UNDEFALT) {
+			h = this.tMap[x][ym] + (this.tMap[xm][y] -  this.tMap[x][ym]) / 2  + (Math.random() * off) - o2;
+			this.tMap[x+px][y+px] = (h <= 0 ? 0.1:h);
+		}
+
+		if(px < tProgress)
+			noise = noise * tRough;
+	    if(px > 1) {
+	        this.createAltitudes(x,x+px,y,y+px,noise, tRough, tProgress);
+	        this.createAltitudes(x+px,xm,y,y+px,noise, tRough, tProgress);
+	        this.createAltitudes(x,x+px,y+px,ym,noise, tRough, tProgress);
+	        this.createAltitudes(x+px,xm,y+px,ym,noise, tRough, tProgress);
+	    }
+	    return;
+	},
+	reset: function() {
+		this.tMap = [];
+		this.mSize = 64;
+	}
+};
+
+/**
+ * Designed to create a mountain bump on the area.
+ * 
+ * @param area : the region to modify
+ * @param centerHeight : height of the region center, for best results, should be higher than the area.
+ * @param bump
+ * @param rough
+ * @param progress
+ * @returns
+ */
+function YFractalPainter(area,centerHeight,bump,rough,progress) {
+	AbstractFractalPainter.call(this,area,centerHeight,bump,rough,progress);
+}
+YFractalPainter.prototype = Object.create(AbstractFractalPainter.prototype); // Javacsript voodoo: creates inheritance
+
+/**
+ * The paint method does the job.
+ * 
+ * @param : nochiasm, boolean stating if only the map parts lower than temporary map should be modified (default)
+ */
+YFractalPainter.prototype.paint = function(nochiasm = true) {
+	let res = this.maps();
+	let depx = res[0];
+	let depy = res[1];
 	
 	// 6 - back to the g_Map
 	for (let pt of this.region)
@@ -129,65 +206,144 @@ FractalPainter.prototype.paint = function(nochiasm = true) {
 		if(nochiasm && (g_Map.height[pt.x][pt.y] > this.tMap[xg][yg]))
 			continue;
 		g_Map.height[pt.x][pt.y] = this.tMap[xg][yg];
-	}
-	
+	}	
 }
 
 /**
- * Reset the painter for new use with same parameters.
+ * Designed to create cracks and hole on the area.
+ * 
+ * @param area : the region to modify
+ * @param centerHeight : height of the region center, for best results, should be lower than the area.
+ * @param bump
+ * @param rough
+ * @param progress
+ * @returns
  */
-FractalPainter.prototype.reset = function() {
-	this.tMap = [];
-	this.mSize = 64;
+function YCracksPainter(area,centerHeight,bump,rough,progress) {
+	AbstractFractalPainter.call(this,area,centerHeight,bump,rough,progress);
+}
+
+YCracksPainter.prototype = Object.create(AbstractFractalPainter.prototype);
+
+/**
+ * The paint method does the job.
+ * 
+ * @param : nochiasm, boolean stating if only the map parts higher than temporary map should be modified (default)
+ */
+YCracksPainter.prototype.paint = function(nochiasm = true) {
+	let res = this.maps();
+	let depx = res[0];
+	let depy = res[1];
+	
+	// 6 - back to the g_Map
+	for (let pt of this.region)
+	{
+		let xg = pt.x - depx;
+		let yg = pt.y - depy;
+		if(nochiasm && (g_Map.height[pt.x][pt.y] < this.tMap[xg][yg]))
+			continue;
+		g_Map.height[pt.x][pt.y] = this.tMap[xg][yg];
+	}	
 }
 
 /**
- * The fractal painter workhorse.
- * This function MUST be called through the paint method ONLY. Use the fractal map object below if you want to use it directly.
+ * Designed to create cliffs whose summit is flat (mesas).
+ * 
+ * @param area : the region to modify
+ * @param centerHeight : height of the region center, for best results, should be higher than the area.
+ * @param bump
+ * @param rough
+ * @param progress
+ * @param mesa : height of the summits.
  */
-FractalPainter.prototype.createAltitudes = function(x, xm, y, ym, noise, tRough, tProgress) {
-	
-	let px = (xm - x)/2;
-	let off = px *  noise * tRough * 2 / this.mSize;
-
-	let o2 = off / 2;
-	let h = 0.1;
-	
-	if(this.tMap[x+px][y] <= UNDEFALT) {
-		h = this.tMap[x][y] + (this.tMap[xm][y] -  this.tMap[x][y]) / 2  + (Math.random() * off) - o2;
-		this.tMap[x+px][y] = (h <= 0 ? 0.1:h);
-	}
-
-	if(this.tMap[x][y+px] <= UNDEFALT) {
-		h = this.tMap[x][ym] + (this.tMap[x][y] -  this.tMap[x][ym]) / 2  + (Math.random() * off) - o2;
-		this.tMap[x][y+px] = (h <= 0 ? 0.1:h);
-	}
-
-	if(this.tMap[xm][y+px] <= UNDEFALT) {
-		h = this.tMap[xm][y] + (this.tMap[xm][ym] -  this.tMap[xm][y]) / 2  + (Math.random() * off) - o2;
-		this.tMap[xm][y+px] = (h <= 0 ? 0.1:h);
-	}
-
-	if(this.tMap[x+px][ym] <= UNDEFALT) {
-		h = this.tMap[xm][ym] + (this.tMap[x][ym] -  this.tMap[xm][ym]) / 2  + (Math.random() * off) - o2;
-		this.tMap[x+px][ym] = (h <= 0 ? 0.1:h);
-	}
-
-	if(this.tMap[x+px][y+px] <= UNDEFALT) {
-		h = this.tMap[x][ym] + (this.tMap[xm][y] -  this.tMap[x][ym]) / 2  + (Math.random() * off) - o2;
-		this.tMap[x+px][y+px] = (h <= 0 ? 0.1:h);
-	}
-
-	if(px < tProgress)
-		noise = noise * tRough;
-    if(px > 1) {
-        this.createAltitudes(x,x+px,y,y+px,noise, tRough, tProgress);
-        this.createAltitudes(x+px,xm,y,y+px,noise, tRough, tProgress);
-        this.createAltitudes(x,x+px,y+px,ym,noise, tRough, tProgress);
-        this.createAltitudes(x+px,xm,y+px,ym,noise, tRough, tProgress);
-    }
-    return;
+function YMesaPainter(area,centerHeight,bump,rough,progress,mesa) {
+	AbstractFractalPainter.call(this,area,centerHeight,bump,rough,progress);
+	this.mesa = mesa;
 }
+
+YMesaPainter.prototype = Object.create(AbstractFractalPainter.prototype);
+
+/**
+ * The paint method does the job.
+ * 
+  * @returns : creates a 'flat' region containing the summits of the mesas
+*/
+YMesaPainter.prototype.paint = function() {
+	let res = this.maps();
+	let depx = res[0];
+	let depy = res[1];
+	this.flat = [];
+	
+	
+	// back to the g_Map
+	for (let pt of this.region)
+	{
+		let xg = pt.x - depx;
+		let yg = pt.y - depy;
+		let h = 0;
+		
+		if(this.tMap[xg][yg] > this.mesa) {
+			this.flat.push(g_TOMap.gCells[pt.x][pt.y]);	
+			h = this.mesa;
+		} else
+			h = this.tMap[xg][yg];
+		if(g_Map.height[pt.x][pt.y] > h)
+			continue;
+		g_Map.height[pt.x][pt.y] = h;
+		
+	}	
+}
+
+/**
+ * Designed to create depressions whose bottom is flat.
+ * 
+ * @param area : the region to modify
+ * @param centerHeight : height of the region center, for best results, should be lower than the area.
+ * @param bump
+ * @param rough
+ * @param progress
+ * @param mesa : height of the bottom.
+ */
+function YDepressionPainter(area,centerHeight,bump,rough,progress,floor) {
+	AbstractFractalPainter.call(this,area,centerHeight,bump,rough,progress);
+	this.floor = floor;
+}
+YDepressionPainter.prototype = Object.create(AbstractFractalPainter.prototype);
+
+/**
+ * The paint method does the job.
+ * 
+  * @returns : creates a 'flat' region containing the bottoms of the mesas
+*/
+YDepressionPainter.prototype.paint = function() {
+	let res = this.maps();
+	let depx = res[0];
+	let depy = res[1];
+	this.flat = [];
+	
+	
+	// melting the g_Map and the temporary map computed by this.maps() defined in the ancestor class
+	for (let pt of this.region)
+	{
+		let xg = pt.x - depx;
+		let yg = pt.y - depy;
+		let h = 0;
+		
+		if(this.tMap[xg][yg] < this.floor) {
+			this.flat.push(g_TOMap.gCells[pt.x][pt.y]);
+			h = this.floor;
+		} else
+			h = this.tMap[xg][yg];
+		if(g_Map.height[pt.x][pt.y] < h)
+			continue;
+		g_Map.height[pt.x][pt.y] = h; // finally the new computed value is written here.
+		
+	}	
+}
+/**
+ * New fractal painters can be created using this template. Copy paste a painter, change it's name and the content of the loop in the paint function.
+ */
+
 
 /**
  * Fractal whole map creation
