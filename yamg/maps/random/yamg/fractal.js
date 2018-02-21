@@ -17,14 +17,14 @@ const yHISTOSIZE = 10000;
  * 
  * It cames in four flavors which differ only in the way the temporary fractal map is merged into the exisiting map.
  * 
- * @param area : the area to be modified (a PointXZ array)
+ * @param area : the area to be modified (a PointXZ or Vector2D array)
  * @param centerHeight : the desired height of the center of the region
  * @param bump : defines the range of height the painter will produce
  * @param rough : defines how chaotic the terrain will be.
  * @param progress : defines how chaotic the region will be.
  * @returns : a fractal painter object
  * 
- * This is the abstract class, from which all others inherit. Don't instantiate it, it does nothing visible and has no paint method.
+ * This is an abstract class, from which all others inherit. Don't instantiate it, it does nothing visible and has no paint method.
  */
 
 
@@ -167,7 +167,7 @@ AbstractFractalPainter.prototype = {
 	    }
 	    return;
 	},
-	reset: function() {
+	reset: function() { // reset the painter for using it on a different region
 		this.tMap = [];
 		this.mSize = 64;
 	}
@@ -178,7 +178,7 @@ AbstractFractalPainter.prototype = {
  * 
  * @param area : the region to modify
  * @param centerHeight : height of the region center, for best results, should be higher than the area.
- * @param bump
+ * @param bump: see the parent class.
  * @param rough
  * @param progress
  * @returns
@@ -266,7 +266,7 @@ YMesaPainter.prototype = Object.create(AbstractFractalPainter.prototype);
 /**
  * The paint method does the job.
  * 
-  * @returns : creates a 'flat' region containing the summits of the mesas
+ * @returns : creates a 'flat' region containing the summits of the mesas
 */
 YMesaPainter.prototype.paint = function() {
 	let res = this.maps();
@@ -313,7 +313,7 @@ YDepressionPainter.prototype = Object.create(AbstractFractalPainter.prototype);
 /**
  * The paint method does the job.
  * 
-  * @returns : creates a 'flat' region containing the bottoms of the mesas
+ * @returns : creates a 'flat' region containing the bottoms of the mesas
 */
 YDepressionPainter.prototype.paint = function() {
 	let res = this.maps();
@@ -438,10 +438,28 @@ HeightArray.prototype.createAltitudes = function(x, xm, y, ym, noise, tRough, tP
 }
 
 /**
+ * Final transfer the temporary map to g_Map when all morphing is done
+ * of course, tMap is cropped, keeping only its center.
+ */
+HeightArray.prototype.finishMorphing = function() {
+	let off = (this.mSize - mapSize) / 2;
+	mapSize++;
+	for (let i = 0; i < mapSize; i++)
+	{
+		for (let j = 0; j < mapSize; j++)
+		{
+			g_Map.height[i][j] = this.tMap[i+off][j+off];
+		}
+	}
+	mapSize--;
+}
+
+/**
  * This method creates a full map with peaks and chiasms.
  * It gives not full map control, but can be used as a template.
  * 
  *  @param tRough: rules the ground irregularity, from 0.1 (smooth) to 1 (very chaotic and probably not playable)
+ *  @param tBump: rules the height range of the final map. From 200 (high range) to 800 (low range)
  *  @param baselevel: height of the main floor of the map.
  *  @param seaRatio: percent of sea (lake) tiles on the map
  *  @param mountRatio: percent of rough peaks or chiasms tiles on the map
@@ -623,20 +641,20 @@ HeightArray.prototype.fullMap = function (tRough,tBump,baselevel,seaRatio,mountR
  * 
  */
 HeightArray.prototype.newMap = function(tBump = 370,baselevel = 50,seaRatio = 10,mountRatio = 5,snowRatio = 0) {
-	let tRough = 1; //(randIntExclusive(90,110) / 100); // 0.1 - 0.8
+	let tRough = 1;
 	mountRatio += Math.floor((1 * mapSize) / 18);
 	let baseRatio = 100 - seaRatio - mountRatio;
 		
 	//Here are defined the big picture of the map.
 	let tProgress = 64; // fractal attenuation range, try it from 2 to mapSize (powers of two). See algorithm for details.
-	let tRelief = (MAX_HEIGHT * mapSize) / tBump; //  200 < 400 < 800 This one rules more or less the highest peaks in the map. MAX_HEIGHT * 2 is a maximum.
+	let tRelief = (MAX_HEIGHT * mapSize) / tBump;
 	
 	let hmin = baselevel * 3;
 	let hmax = baselevel * 5;
 	
 	let s00 = randIntExclusive(hmin,hmax); // saving original corners of the map to keep the big picture
 	let s10 = randIntExclusive(hmin,hmax); // these can be set to a fixed value when full control is wanted (max MAX_HEIGHT/2 )
-	let s01 = randIntExclusive(hmin,hmax); // for instance setting a corner ot a higher value than others to force mountains there.
+	let s01 = randIntExclusive(hmin,hmax); // for instance setting a corner at a lower value than others to force water there.
 	let s11 = randIntExclusive(hmin,hmax);
 	let s22 = baselevel * 5; // height of the center
 	
@@ -688,7 +706,7 @@ HeightArray.prototype.newMap = function(tBump = 370,baselevel = 50,seaRatio = 10
 	this.finishMorphing(); // create the g_Map.height array from t_Map
 	
 	//----------------------- 2 - create an height histogram to adjust mountains ratio.
-	for (let i = 0; i < 10000; i++)
+	for (let i = 0; i < yHISTOSIZE; i++)
 		this.histo[i] = 0;
 	
 	if (g_MapSettings.CircularMap) {
@@ -730,7 +748,7 @@ HeightArray.prototype.newMap = function(tBump = 370,baselevel = 50,seaRatio = 10
 		var limit = this.mSize * this.mSize * (1 - mountRatio / 100);
 		var many = this.mSize * this.mSize;
 	}
-	while ((count < limit) && (i < 10000))
+	while ((count < limit) && (i < yHISTOSIZE))
 		count += this.histo[i++];
 	peakHeigth = i / 10;
 	
@@ -753,7 +771,7 @@ HeightArray.prototype.newMap = function(tBump = 370,baselevel = 50,seaRatio = 10
 			let alt = mountMap[i][j] - gap;
 			if(( mountMap[i][j] > peakHeigth) && ( alt > g_Map.height[i][j])) {
 				g_Map.height[i][j] = alt;
-				monts.push(new PointXZ(i,j)); // store the region for later use
+				monts.push({x:i,y:j,z:j}); // store the region for later use
 				if(alt > hMaxi)
 					hMaxi = alt;
 			}
@@ -763,7 +781,7 @@ HeightArray.prototype.newMap = function(tBump = 370,baselevel = 50,seaRatio = 10
 	let hMiddle = hMaxi - (hMaxi - hMini) / 2;
 	mountMap = null;
 	
-	for (let i = 0; i < 10000; i++)
+	for (let i = 0; i < yHISTOSIZE; i++)
 		this.histo[i] = 0;
 	
 	if (g_MapSettings.CircularMap) {
@@ -799,27 +817,8 @@ HeightArray.prototype.newMap = function(tBump = 370,baselevel = 50,seaRatio = 10
 	} else {
 		var limit = mapSize * mapSize * (seaRatio / 100);
 	}
-	while ((count < limit) && (i < 10000))
+	while ((count < limit) && (i < yHISTOSIZE))
 		count += this.histo[i++];
 	let waterHeight = i / 10;
 	return [waterHeight,snowLimit,hMaxi,hMini,hMiddle,monts];
 }
-
-/**
- * Final transfer the temporary map to g_Map when all morphing is done
- * of course, tMap is cropped, keeping only its center.
- */
-HeightArray.prototype.finishMorphing = function() {
-	let off = (this.mSize - mapSize) / 2;
-	mapSize++;
-	for (let i = 0; i < mapSize; i++)
-	{
-		for (let j = 0; j < mapSize; j++)
-		{
-			g_Map.height[i][j] = this.tMap[i+off][j+off];
-		}
-	}
-	
-	mapSize--;
-}
-
