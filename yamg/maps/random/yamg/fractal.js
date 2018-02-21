@@ -283,7 +283,7 @@ YMesaPainter.prototype.paint = function() {
 		let h = 0;
 		
 		if(this.tMap[xg][yg] > this.mesa) {
-			this.flat.push(g_TOMap.gCells[pt.x][pt.y]);	
+			this.flat.push({x:pt.x,y:pt.y,z:pt.y});	// g_TOMap.gCells[pt.x][pt.y]
 			h = this.mesa;
 		} else
 			h = this.tMap[xg][yg];
@@ -330,7 +330,7 @@ YDepressionPainter.prototype.paint = function() {
 		let h = 0;
 		
 		if(this.tMap[xg][yg] < this.floor) {
-			this.flat.push(g_TOMap.gCells[pt.x][pt.y]);
+			this.flat.push({x:pt.x,y:pt.y,z:pt.y});	// g_TOMap.gCells[pt.x][pt.y]
 			h = this.floor;
 		} else
 			h = this.tMap[xg][yg];
