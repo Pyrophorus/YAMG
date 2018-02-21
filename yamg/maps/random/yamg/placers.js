@@ -17,15 +17,19 @@
 /* Unlike rmgen, the software operates on a unique array holding cell objects
  * An additional data structure (a heap) is set up as a tool for use of various filling functions.
  */
+
+// constants for use with the lock member of the cells
 const yUNLOCKED = 0;
 const yFORESTLOCK = 1;
 const yDECOLOCK = 1 << 1;
 const yROADLOCK = 1 << 2;
 const yPATCHLOCK = 1 << 3;
+const yZONELOCK = 1 << 4;
 
 const yLOCKALL = 0XFFFFFFFF;
 
-const yMAXSLOPE = 2;
+const yMAXSLOPE = 2; // roads maximal slope
+const ySLOPELIM = 4; // slope limit between cliffs and flat terrain
 
 /**
  * This function extracts a points array from a zone (which is a cells array)
@@ -47,8 +51,14 @@ function zoneToPoints(zone)
 function pointsToZone(points)
 {
 	let zone = [];
-	for(let p of points) {
-		zone.push(g_TOMap.gCells[p.x][p.z]); // change this to zone.push(g_TOMap.gCells[p.x][p.y]); if Vector2D is preferred.
+	if(points[0].z != undefined) {
+		for(let p of points) {
+			zone.push(g_TOMap.gCells[p.x][p.z]);
+		}
+	} else {
+		for(let p of points) {
+			zone.push(g_TOMap.gCells[p.x][p.y]);
+		}		
 	}
 	return zone;
 }
@@ -73,6 +83,7 @@ function pointsToZone(points)
 function Cell(x,y,alt,slope,terrain,lock) {
 	this.x = x;
 	this.y = y;
+	this.z = y; // ??? why not, if compatibility is still needed ?
 	this.alt = alt;
 	this.slope = slope;
 	this.terrain = terrain;
@@ -82,6 +93,52 @@ function Cell(x,y,alt,slope,terrain,lock) {
 	this.lock = lock;
 	this.key = 0;
 	this.done = false;
+}
+
+Cell.prototype.update = function() {
+	// update members when g_Map.height is changed
+	let a = (g_Map.height[this.x][this.y] + g_Map.height[this.x+1][this.y] + g_Map.height[this.x][this.y+1] + g_Map.height[this.x+1][this.y+1]) / 4;
+	let s1 = Math.abs(g_Map.height[this.x+1][this.y+1] - g_Map.height[this.x][this.y]);
+	let s2 = Math.abs(g_Map.height[this.x+1][this.y] - g_Map.height[this.x][this.y+1]);
+	this.slope = (s1 > s2) ? s1 : s2;
+	if( a < waterHeight) {
+		this.terrain = "water";
+	} else {
+		if( this.slope > ySLOPELIM) {
+			this.terrain = "cliff";
+		} else {
+			this.terrain = "wild";
+		}
+	}
+}
+
+/**
+* 	mutator replacing direct setting of g_Map.height
+* Not mandatory but recommended if few modifications are made. Avoid using global updates, see below
+*/
+Cell.prototype.setHeight = function(h) {
+	g_Map.height[this.x][this.y] = h;
+	this.update();
+	if((this.x > 0) && (this.y > 0))
+		gCells[this.x-1][this.y-1].update();
+	if((this.x > 0))
+		gCells[this.x-1][this.y].update();
+	if((this.y > 0))
+		gCells[this.x][this.y-1].update();
+}
+
+/**
+* Another access to the slope, more expansive, but always up to date
+* Can be provided along with the other solution.
+* 
+* @returns : slope
+*/
+Cell.prototype.getSlope = function() {
+
+	let s1 = Math.abs(g_Map.height[this.x+1][this.y+1] - g_Map.height[this.x][this.y]);
+	let s2 = Math.abs(g_Map.height[this.x+1][this.x] - g_Map.height[this.x][this.y+1]);
+	return (s1 > s2) ? s1 : s2;
+
 }
 
 /**
@@ -132,7 +189,7 @@ function TileObjectMap(wHeight,sLimit) {
 			if( a < wHeight) {
 				this.gCells[i][j] = new Cell(i,j,a,s,"water",lock);
 			} else {
-				if( s > 4) {
+				if( s > ySLOPELIM) {
 					this.gCells[i][j] = new Cell(i,j,a,s,"cliff",lock);
 				} else {
 					this.gCells[i][j] = new Cell(i,j,a,s,"wild",lock);
@@ -177,6 +234,16 @@ function setTilesNeighbors(tObjMap) {
 TileObjectMap.prototype.applyTerrainType = function(type,lock,zone) {
 	for(let cell of zone) {
 		cell.terrain = type;
+		cell.lock = lock;
+	}
+}
+
+TileObjectMap.prototype.applyTerrainTypeSlope = function(type,type2,lock,zone) {
+	for(let cell of zone) {
+		if(cell.slope > ySLOPELIM)
+			cell.terrain = type2;
+		else
+			cell.terrain = type;
 		cell.lock = lock;
 	}
 }
@@ -233,6 +300,16 @@ TileObjectMap.prototype.clearDoneAndLock = function(lock) {
 			this.gCells[i][j].lock &= mask;
 		}
 }
+
+TileObjectMap.prototype.recalcAll = function() {
+	for(let i = 0; i < mapSize; i++) 
+	for(let j = 0; j < mapSize; j++)
+	{
+		let tile = g_TOMap.gCells[i][j];
+		tile.update();
+	}
+}
+
 
 /**
  * ========================== Roads building =============================
@@ -324,8 +401,6 @@ function crossMountains(ti) {
 /**
  * This is the main procedure to build roads
  * 
- *  // medium 4512,9474 large 388 
- *  
  *  @param: endpoints, an array of cells defining the endpoints of the road. Can be anything, including players bases of course.
  *  @param: mPenalty, positive number stating the cost of a step in mountains. High values avoid mountains crossing
  *  @param: wPenalty, positive number stating the cost of a step in water (fords).
@@ -692,7 +767,9 @@ This section provides placers and constraints objects using the TileObjectMap ob
  * - expand(count,addFlag) can add 'count' points to a previously computed region. The 'border' array is used as start points. If the addFlag is true,
  * the final 'zone' array will contain the whole region. If false, only the points added. You can call this more than once to get concentric regions, using
  * the same or different tuning parameters (set them directly in the placer before the call).
- * - expandZone(zone,count) adds 'points' to an existing zone (Cell array, use the conversion function to get it from a points array).
+ * 
+ * - expandZone(zone,count) adds 'points' to an existing zone (Cell array, use the conversion function to get it from a points array). Use count = 0 if you want only the
+ * border to be computed. The feature works only on connexe regions.
  * 
  * Important note:
  * For this placer to work as expected, and particularly the border feature, it is important to manage the 'done' flag in the cells correctly. Cells marked as 'done' are
@@ -742,7 +819,6 @@ YPatchPlacer.prototype.find = function(reset = true) {
 			it.key = 0;
 			g_TOMap.heap.addCell(it);
 		}
-		
 		// using a heap to store neighbors allows to privilege expansion on close altitude cells. This gives a more realistic result than expanding equally in all directions.
 		// we stop if no more neighbors are available or we've done enough.
 		while((g_TOMap.heap.getSize() > 0) && (this.count-- > 0)) {
@@ -789,120 +865,70 @@ YPatchPlacer.prototype.expand = function(count,addFlag) { // experimental
 	if(this.zone == undefined)
 		return undefined;
 	this.count = count;
-	for(n in this.zone)
+	for(let n of this.zone)
 		n.done = true;
 	if(!addFlag) {
 		this.card = 1;
 		this.zone = undefined;		
 	}
-	for(n of this.border)
+	for(let n of this.border) {
+		n.done = false;
 		g_TOMap.heap.addCell(n);
+	}	
 	this.border = [];
 	return (this.find(false));
 }
 
-YPatchPlacer.prototype.expandZone = function(zone,count) { // experimental
-	let key = 0;
-	g_TOMap.heap.resetHeap();
+YPatchPlacer.prototype.expandZone = function(zone,count) {
+	let cx = 0;
+	let cy = 0;
+	this.zone = [];
+	this.border = [];
+	
 	for(let pt of zone) {
-		let it = g_TOMap.gCells[pt.x][pt.z];
-		it.done = true;
-		it.key = key++;
-		g_TOMap.heap.addCell(it);
+		cx += pt.x;
+		cy += pt.y;
+		let it = g_TOMap.gCells[pt.x][pt.y];
+		it.lock |= yZONELOCK;		
 	}
-	this.zone = undefined;
-	this.border = [];
-	return (this.find(false));
-}
-
-
-function YPlacerFromTerrain(terrain) {
-	 this.terrain = terrain;
-}
-
-YPlacerFromTerrain.prototype.place = function() {
-	let points = [];
-//	let mapSize = g_TOMap.mSize;
-	
-	for (let x = 0; x < mapSize; ++x) {
-		for (let z = 0; z < mapSize; ++z)
-	    {
-			if (g_TOMap.gCells[x][z].terrain == this.terrain)
-				points.push(g_TOMap.gCells[x][z]);
-	    }
-	 }
-	return zoneToPoints(points);
-}
-
-function YPlacerFromheight(height) {
-	 this.height = height;
-}
-
-YPlacerFromheight.prototype.place = function() {
-	let points = [];
-//	let mapSize = g_TOMap.mSize;
-	
-	for (let x = 0; x < mapSize; ++x) {
-		for (let z = 0; z < mapSize; ++z)
-	    {
-			if (g_TOMap.gCells[x][z].alt < this.height)
-				points.push(g_TOMap.gCells[x][z]);
-	    }
-	 }
-	return zoneToPoints(points);
-}
-
-
- // ---------------------- constraints ------------------
- function AvoidSlopeConstraint(slope)
- {
- 	this.slope = slope;
- }
-
- AvoidSlopeConstraint.prototype.allows = function(x, z)
- {
- 	return g_TOMap.gCells[x][z].slope <= this.slope;
- };
-
- function AvoidAltConstraint(height)
- {
- 	this.height = height;
- }
-
- AvoidAltConstraint.prototype.allows = function(x, z)
- {
- 	return g_TOMap.gCells[x][z].alt <= this.height;
- };
-
- function AvoidLockedConstraint(lock)
- {
- 	this.lock = lock;
- }
-
- AvoidLockedConstraint.prototype.allows = function(x, z)
- {
- 	return !(g_TOMap.gCells[x][z].lock & this.lock);
- }
-
-// ===================== utilities ======================
-function paintPointsArray(zone,terrain)
-{
-	for (let cell of zone)
-	{
-		placeTerrain(cell.x, cell.y, terrain);
+	g_TOMap.heap.resetHeap();
+	let it = null;
+	this.barx = Math.floor(cx / zone.length);
+	this.bary = Math.floor(cy / zone.length);
+	if((this.sx == 0) && (this.sy == 0)) {
+		it = g_TOMap.gCells[this.barx][this.bary];
+		this.sx = this.barx;
+		this.sy = this.bary;
+	} else {
+		it = g_TOMap.gCells[this.sx][this.sy];
 	}
-}
-
-function paintPointsLocked(mask)
-{
-	for (let x = 0; x < mapSize; ++x) {
-		for (let z = 0; z < mapSize; ++z)
-	    {
-			if(!g_TOMap.gCells[x][z].lock & mask)
-				continue;
-			g_TOMap.gCells[x][z].terrain = "marked";
-	    }
-	 }
+	it.key = 0;
+	this.card = 0;
+	g_TOMap.heap.addCell(it);
+	while(g_TOMap.heap.getSize() > 0) {
+		let cell = g_TOMap.heap.pickCell();
+		let b = 0;
+		for(let ne of cell) {
+			if(ne.lock & yZONELOCK) {
+				ne.key = ne.slope + cell.key;
+				g_TOMap.heap.addCell(ne);
+			} else
+				b++;
+		}
+		if(b > 0) {
+			this.border.push(cell);
+		}
+		this.zone.push(cell);
+		this.card++;
+	}
+	let unlock = ~ yZONELOCK;
+	for(let p of zone)
+		p.lock &= unlock;
+	this.count = count;
+	if(count > 0) {
+		return (this.find(true));
+	} else
+	return(this.zone);
 }
 
  /**
@@ -1019,5 +1045,26 @@ function paintPointsLocked(mask)
  	this.getSize = function() {
  			    return (this.last - 1);
  			}
+ }
+
+//===================== utilities ======================
+ function paintPointsArray(zone,terrain)
+ {
+ 	for (let cell of zone)
+ 	{
+ 		placeTerrain(cell.x, cell.y, terrain);
+ 	}
+ }
+
+ function paintPointsLocked(mask)
+ {
+ 	for (let x = 0; x < mapSize; ++x) {
+ 		for (let z = 0; z < mapSize; ++z)
+ 	    {
+ 			if(!g_TOMap.gCells[x][z].lock & mask)
+ 				continue;
+ 			g_TOMap.gCells[x][z].terrain = "marked";
+ 	    }
+ 	 }
  }
 
