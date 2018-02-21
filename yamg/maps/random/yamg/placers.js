@@ -28,7 +28,6 @@ const yZONELOCK = 1 << 4;
 
 const yLOCKALL = 0XFFFFFFFF;
 
-const yMAXSLOPE = 2; // roads maximal slope
 const ySLOPELIM = 4; // slope limit between cliffs and flat terrain
 
 /**
@@ -524,6 +523,9 @@ TileObjectMap.prototype.buildRoads = function(endpoints,mPenalty = 30, wPenalty 
  * This algorithm searches the map to find suitable locations for players.
  * Need to be on a rather large piece of flat terrain, as far as possible from other players
  */
+
+const yMAXSLOPE = 2; // bases maximal slope
+
 TileObjectMap.prototype.findPlayersBases = function() {
 
 	let inc = Math.floor(mapSize / 8);
@@ -769,7 +771,9 @@ This section provides placers and constraints objects using the TileObjectMap ob
  * the same or different tuning parameters (set them directly in the placer before the call).
  * 
  * - expandZone(zone,count) adds 'points' to an existing zone (Cell array, use the conversion function to get it from a points array). Use count = 0 if you want only the
- * border to be computed. The feature works only on connexe regions.
+ * border to be computed. The feature works only on connexe regions. This function works in two steps: first analyzing the region, and second (if count > 0), expand
+ * it, calling the expand function above. In the first step, only the startx,starty parameters are used: they should hold a point in the region. Other parameters can be
+ * set to anything if you don't plan to expand it.
  * 
  * Important note:
  * For this placer to work as expected, and particularly the border feature, it is important to manage the 'done' flag in the cells correctly. Cells marked as 'done' are
@@ -861,7 +865,7 @@ YPatchPlacer.prototype.replay = function(startx,starty,count) {
 	return (this.find(true));
 }
 
-YPatchPlacer.prototype.expand = function(count,addFlag) { // experimental
+YPatchPlacer.prototype.expand = function(count,addFlag) {
 	if(this.zone == undefined)
 		return undefined;
 	this.count = count;
@@ -935,10 +939,10 @@ YPatchPlacer.prototype.expandZone = function(zone,count) {
   * An implementation of the classical heap container (dynamically sorted array).
   * One can insert here anything provided it has 'key' and 'done' members.
   * Mainly used to sort cells (from the cell map created above)
-  * Please note that the HeightMap object embeds a Heap, so you should not need to use this constructor.
+  * Please note that the HeightMap object embeds a Heap, so you should not need to instantiate another one.
   * 
   * @param size : size of the container, use 'mapSize * mapSize' to avoid overflow problems
-  * @returns a Heap pbject
+  * @returns a Heap object
   */
  function Heap(size) {
  	this.last = 1;
