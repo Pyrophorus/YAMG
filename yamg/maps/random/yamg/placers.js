@@ -26,6 +26,7 @@ const yROADLOCK = 1 << 2;
 const yPATCHLOCK = 1 << 3;
 const yZONELOCK = 1 << 4;
 
+const yALLMASK = 0X80000000;
 const yLOCKALL = 0XFFFFFFFF;
 
 const ySLOPELIM = 4; // slope limit between cliffs and flat terrain
@@ -128,7 +129,6 @@ Cell.prototype.setHeight = function(h) {
 
 /**
 * Another access to the slope, more expansive, but always up to date
-* Can be provided along with the other solution.
 * 
 * @returns : slope
 */
@@ -137,6 +137,17 @@ Cell.prototype.getSlope = function() {
 	let s1 = Math.abs(g_Map.height[this.x+1][this.y+1] - g_Map.height[this.x][this.y]);
 	let s2 = Math.abs(g_Map.height[this.x+1][this.x] - g_Map.height[this.x][this.y+1]);
 	return (s1 > s2) ? s1 : s2;
+
+}
+
+/**
+* Another access to the alt member, more expansive, but always up to date
+* 
+* @returns : alt
+*/
+Cell.prototype.getAlt = function() {
+
+	return (g_Map.height[this.x][this.y] + g_Map.height[this.x+1][this.y] + g_Map.height[this.x][this.y+1] + g_Map.height[this.x+1][this.y+1]) / 4;
 
 }
 
@@ -318,7 +329,6 @@ const R_NONE = 0; 	///< no road at this time
 const R_ROAD = 1;   ///< a road uses this cell
 const R_STOP = 2;   ///< this cell is an endpoint for the roads
 const R_HIT = 3;    ///< this endpoint have been reached by a road
-const hWater = waterHeight - 1;
 
 function recalcTile(tile) {
 	let i = tile.x;
@@ -398,15 +408,16 @@ function crossMountains(ti) {
 }
 
 /**
- * This is the main procedure to build roads
+ * This is the main procedure to build roads.
  * 
  *  @param: endpoints, an array of cells defining the endpoints of the road. Can be anything, including players bases of course.
+ *  @param: 
  *  @param: mPenalty, positive number stating the cost of a step in mountains. High values avoid mountains crossing
  *  @param: wPenalty, positive number stating the cost of a step in water (fords).
  *  @param: noise, positive integer to make them more twisted, particularly on flat parts of the map. 
  */
 
-TileObjectMap.prototype.buildRoads = function(endpoints,mPenalty = 30, wPenalty = 20, noise=3) {
+TileObjectMap.prototype.buildRoads = function(endpoints,hWater, hMini, hMiddle, mPenalty = 30, wPenalty = 20, noise=3) {
 	if(endpoints.length < 2)// obviously, we can't build roads with less than two points.
 		return 0;
 	
@@ -786,7 +797,7 @@ This section provides placers and constraints objects using the TileObjectMap ob
  * Of course, the braves searching for special effects can filter the 'border' region to control further expansion and try some other hacks. Have fun !
  * 
  */
-function YPatchPlacer(startx,starty,count,slopemin,slopemax,altmin,altmax,compact,slopeRatio,altRatio,noise,mask,lock) {
+function YAbstractPatchPlacer(startx,starty,count,slopemin,slopemax,altmin,altmax,compact,slopeRatio,altRatio,noise,mask,lock) {
 	 this.sx = startx;
 	 this.sy = starty;
 	 this.barx = startx;
@@ -801,19 +812,19 @@ function YPatchPlacer(startx,starty,count,slopemin,slopemax,altmin,altmax,compac
 	 this.slopeRatio = slopeRatio;
 	 this.altRatio = altRatio;
 	 this.noise = noise;
-	 this.mask = mask;
+	 this.mask = mask | yALLMASK;
 	 this.lock = lock;
 	 this.base = g_TOMap.gCells[startx][starty].alt;
 	 this.border = [];
 	 this.zone = undefined;
 }
 
-YPatchPlacer.prototype.place = function() {
+YAbstractPatchPlacer.prototype.place = function() {
 	this.zone = undefined;
 	return(zoneToPoints(this.find(true)));
 }
 
-YPatchPlacer.prototype.find = function(reset = true) {
+YAbstractPatchPlacer.prototype.find = function(reset = true) {
 	if (this.zone == undefined)
 		this.zone = [];
 	if(this.count > 0) {
@@ -823,29 +834,7 @@ YPatchPlacer.prototype.find = function(reset = true) {
 			it.key = 0;
 			g_TOMap.heap.addCell(it);
 		}
-		// using a heap to store neighbors allows to privilege expansion on close altitude cells. This gives a more realistic result than expanding equally in all directions.
-		// we stop if no more neighbors are available or we've done enough.
-		while((g_TOMap.heap.getSize() > 0) && (this.count-- > 0)) {
-			 let it = g_TOMap.heap.pickCell();
-			 if(it == undefined)
-				 break;
-			 this.zone.push(it);
-			 this.barx += it.x; this.bary += it.y;
-			 this.card++;
-			 let cc = false;
-			 for(let neigh of it) {
-				 if((neigh.slope < this.slopemax) && (neigh.slope >= this.slopemin) && (neigh.alt < this.altmax) && (neigh.alt >= this.altmin) && !(this.mask & neigh.lock)) {
-					 if(!neigh.done) {
-						 neigh.key = (it.key * this.compact) + (neigh.slope * this.slopeRatio) + this.altRatio * Math.abs(neigh.alt - this.base) + randIntInclusive(0,this.noise);
-					     neigh.lock |= this.lock;
-						 g_TOMap.heap.addCell(neigh);
-					 }
-				 } else if(!neigh.done)
-					 cc = true;
-			 }
-			 if(cc)
-				 this.border.push(it);
-		}
+		this.explore();
 		this.barx = Math.round(this.barx / this.card); this.bary = Math.round(this.bary / this.card);
 		
 		while(g_TOMap.heap.getSize() > 0)
@@ -855,7 +844,7 @@ YPatchPlacer.prototype.find = function(reset = true) {
 	return this.zone;
 }
 
-YPatchPlacer.prototype.replay = function(startx,starty,count) {
+YAbstractPatchPlacer.prototype.replay = function(startx,starty,count) {
 	this.sx = startx;
 	this.sy = starty;
 	this.card = 1;
@@ -865,7 +854,7 @@ YPatchPlacer.prototype.replay = function(startx,starty,count) {
 	return (this.find(true));
 }
 
-YPatchPlacer.prototype.expand = function(count,addFlag) {
+YAbstractPatchPlacer.prototype.expand = function(count,addFlag) {
 	if(this.zone == undefined)
 		return undefined;
 	this.count = count;
@@ -883,11 +872,20 @@ YPatchPlacer.prototype.expand = function(count,addFlag) {
 	return (this.find(false));
 }
 
-YPatchPlacer.prototype.expandZone = function(zone,count) {
+YAbstractPatchPlacer.prototype.expandZone = function(zone,count) {
 	let cx = 0;
 	let cy = 0;
 	this.zone = [];
 	this.border = [];
+	
+	if(points[0].z != undefined) {
+		let zonea = zone;
+		zone = [];
+		for(let p of zonea) {
+			zone.push({x:p.x,y:p.z});
+		}
+		zonea = null;
+	}
 	
 	for(let pt of zone) {
 		cx += pt.x;
@@ -900,13 +898,13 @@ YPatchPlacer.prototype.expandZone = function(zone,count) {
 	this.barx = Math.floor(cx / zone.length);
 	this.bary = Math.floor(cy / zone.length);
 	if((this.sx == 0) && (this.sy == 0)) {
-		it = g_TOMap.gCells[this.barx][this.bary];
-		this.sx = this.barx;
-		this.sy = this.bary;
+		this.sx = zone[0].x;
+		this.sy = zone[0].y;
+		it = g_TOMap.gCells[sx][sy];
 	} else {
 		it = g_TOMap.gCells[this.sx][this.sy];
 	}
-	it.key = 0;
+	it.key = 1;
 	this.card = 0;
 	g_TOMap.heap.addCell(it);
 	while(g_TOMap.heap.getSize() > 0) {
@@ -934,6 +932,38 @@ YPatchPlacer.prototype.expandZone = function(zone,count) {
 	} else
 	return(this.zone);
 }
+
+function YPatchPlacer(startx,starty,count,slopemin,slopemax,altmin,altmax,compact,slopeRatio,altRatio,noise,mask,lock) {
+	YAbstractPatchPlacer.call(this,startx,starty,count,slopemin,slopemax,altmin,altmax,compact,slopeRatio,altRatio,noise,mask,lock);
+}
+YPatchPlacer.prototype = Object.create(YAbstractPatchPlacer.prototype); // Javacsript voodoo: creates inheritance
+
+YPatchPlacer.prototype.explore = function() {
+	// using a heap to store neighbors allows to privilege expansion on close altitude cells. This gives a more realistic result than expanding equally in all directions.
+	// we stop if no more neighbors are available or we've done enough.
+	while((g_TOMap.heap.getSize() > 0) && (this.count-- > 0)) {
+		 let it = g_TOMap.heap.pickCell();
+		 if(it == undefined)
+			 break;
+		 this.zone.push(it);
+		 this.barx += it.x; this.bary += it.y;
+		 this.card++;
+		 let cc = false;
+		 for(let neigh of it) {
+			 if((neigh.slope < this.slopemax) && (neigh.slope >= this.slopemin) && (neigh.alt < this.altmax) && (neigh.alt >= this.altmin) && !(this.mask & neigh.lock)) {
+				 if(!neigh.done) {
+					 neigh.key = (it.key * this.compact) + (neigh.slope * this.slopeRatio) + this.altRatio * Math.abs(neigh.alt - this.base) + randIntInclusive(0,this.noise);
+				     neigh.lock |= this.lock;
+					 g_TOMap.heap.addCell(neigh);
+				 }
+			 } else if(!neigh.done)
+				 cc = true;
+		 }
+		 if(cc)
+			 this.border.push(it);
+	}	
+}
+
 
  /**
   * An implementation of the classical heap container (dynamically sorted array).

@@ -107,7 +107,7 @@ for(let p of patches) {
 	endpoints.push(g_TOMap.gCells[p.barx][p.bary]);
 }
 
-var nets = g_TOMap.buildRoads(endpoints);
+var nets = g_TOMap.buildRoads(endpoints,waterHeight - 1, hMini, hMiddle);
 
 // ========= end retry loop.
 } while((--noMore > 0) && (patches.length < numPlayers) && (nets > 1));
