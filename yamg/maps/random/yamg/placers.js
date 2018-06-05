@@ -78,9 +78,8 @@ function pointsToZone(points)
  * @ member key : the sorting key of the heap
  * @ member done : a boolean flag, set by insertion into the heap. Avoid storing the cell more than once.
  * @ members road, back, rType set and used by the roads building
- */
 
-function Cell(x,y,alt,slope,terrain,lock) {
+ function Cell(x,y,alt,slope,terrain,lock) {
 	this.x = x;
 	this.y = y;
 	this.z = y; // ??? why not, if compatibility is still needed ?
@@ -94,6 +93,21 @@ function Cell(x,y,alt,slope,terrain,lock) {
 	this.key = 0;
 	this.done = false;
 }
+*/
+
+function Cell(x,y,alt,slope,terrain,lock) {
+	Vector2D.call(this,x,y);
+	this.alt = alt;
+	this.slope = slope;
+	this.terrain = terrain;
+	this.road = undefined; // those two are references to other Cells, used in road building and more.
+	this.back = undefined;
+	this.rType = 0;
+	this.lock = lock;
+	this.key = 0;
+	this.done = false;
+}
+Cell.prototype = Object.create(Vector2D.prototype);
 
 Cell.prototype.update = function() {
 	// update members when g_Map.height is changed
@@ -362,6 +376,20 @@ function crossMountains(ti) {
 			g_Map.height[r.x][r.y+1] = sl;
 			g_Map.height[r.x+1][r.y+1] = sl;
 			recalcTile(r);
+			/*
+			if( (r.x != prev.x) && (r.y != prev.y) ) {
+				let bx = (r.x > prev.x) ? prev.x : r.x;
+				let by = (r.y > prev.y) ? prev.y : r.y;
+				let s = sl;
+				if(g_Map.height[bx][by] >= s) {
+					g_Map.height[bx+2][by+2] = s;
+					g_Map.height[bx][by] = s;
+				} else {
+					g_Map.height[bx+2][by] = s;
+					g_Map.height[bx][by+2] = s;
+				}
+			}
+			*/
 			sl += ySLOPEMAX;
 			r.back = prev;
 			prev = r;
@@ -372,6 +400,7 @@ function crossMountains(ti) {
 			r.back = prev;
 		}
 	} else {
+		/*
 		r = ti;
 		prev = ti.back;
 		while((r != undefined) && (r.slope > ySLOPEMAX) && (n-- > 0)) {
@@ -396,12 +425,24 @@ function crossMountains(ti) {
 			g_Map.height[ro.x][ro.y+1] = sl;
 			g_Map.height[ro.x+1][ro.y+1] = sl;
 			recalcTile(ro);
+			/*
+			if( (ro.back != undefined) && (ro.x != ro.back.x) && (ro.y != ro.back.y) ) {
+				let bx = (ro.x > ro.back.x) ? ro.back.x : ro.x;
+				let by = (ro.y > ro.back.y) ? ro.back.y : ro.y;
+				if(g_Map.height[bx][by] > sl) {
+					g_Map.height[bx+2][by+2] = sl;
+					g_Map.height[bx][by] = sl;
+				} else {
+					g_Map.height[bx+2][by] = sl;
+					g_Map.height[bx][by+2] = sl;
+				}
+			}
 			sl += ySLOPEMAX;
 			ro = ro.back;
-			if(ro == undefined)
-				warn("ro.back is undefined");
-
+			//if(ro == undefined)
+				//warn("ro.back is undefined");
 		}
+*/
 		r =ti;
 	}
 	return r;
@@ -471,7 +512,7 @@ TileObjectMap.prototype.buildRoads = function(endpoints,hWater, hMini, hMiddle, 
                             break;                    		
                     	}
                     	// computing the cost of this step
-                    	cost = l.slope * 8; // flat  is prefered
+                    	cost = l.slope * it.key /2; // flat  is prefered
                     	cost += ( (l.alt - it.alt) < 0 ? -(l.alt - it.alt) * 3 : (l.alt - it.alt) * 3 );
                     	if(l.alt > hMini) // mountains should be avoided when possible
                     		cost += mPenalty;
@@ -647,7 +688,7 @@ TileObjectMap.prototype.putSameEntity = function(zone,count,retry,entity,mask) {
 		let p = randIntExclusive(0,zone.length);
 		let cell = zone[p];
 		if(!cell.done && !(cell.lock & mask)) {
-			g_Map.addObject(new Entity(entity, 0, cell.x, cell.y, randFloat(0, 2*Math.PI)));
+			g_Map.placeEntityPassable(entity, 0, cell, randFloat(0, 2*Math.PI));
 			cell.done = true;
 			count--;
 		}
@@ -659,7 +700,7 @@ TileObjectMap.prototype.putRandEntities = function(zone,count,retry,entities,mas
 		let p = randIntExclusive(0,zone.length);
 		let cell = zone[p];
 		if((!cell.done) && !(cell.lock & mask)) {
-			g_Map.addObject(new Entity(pickRandom(entities), 0, cell.x, cell.y, randFloat(0, 2*Math.PI)));
+			g_Map.placeEntityPassable(pickRandom(entities), 0, cell, randFloat(0, 2*Math.PI));
 			cell.done = true;
 			count--;
 		}
@@ -678,7 +719,7 @@ TileObjectMap.prototype.putRandFlock = function(zone,count,card,retry,entity,pla
 			for(let c of placer.zone) {
 			 	let q = randIntExclusive(0, 3);
 			 	if(q == 1) {
-			 		g_Map.addObject(new Entity(entity, 0, c.x, c.y, randFloat(0, 2*Math.PI)));
+			 		g_Map.placeEntityPassable(entity, 0, c, randFloat(0, 2*Math.PI));
 			 		count--;
 			 		
 			 	}
@@ -696,7 +737,7 @@ TileObjectMap.prototype.putLargeEntity = function(zone,count,retry,entity,mask) 
 				cell.done = true;
 		}
 		if(!cell.done) {
-			g_Map.addObject(new Entity(entity, 0, cell.x, cell.y, randFloat(0, 2*Math.PI)));
+			g_Map.placeEntityPassable(entity, 0, cell, randFloat(0, 2*Math.PI));
 			cell.done = true;
 			count--;
 		}
@@ -712,7 +753,7 @@ TileObjectMap.prototype.putLargeEntities = function(zone,count,retry,entities,ma
 				cell.done = true;
 		}
 		if(!cell.done) {
-			g_Map.addObject(new Entity(pickRandom(entities), 0, cell.x, cell.y, randFloat(0, 2*Math.PI)));
+			g_Map.placeEntityPassable(pickRandom(entities), 0, cell, randFloat(0, 2*Math.PI));
 			cell.done = true;
 			count--;
 		}
@@ -729,13 +770,15 @@ TileObjectMap.prototype.putForestChunks = function(zone,count,card,retry,trees,f
 				continue;
 			}
 			for(let c of placer.zone) {
-				placeTerrain(c.x, c.y, floor);
-			 	let q = randIntExclusive(0, 3);
-			 	if(q == 1) {
-			 		g_Map.addObject(new Entity(pickRandom(trees), 0, c.x, c.y, randFloat(0, 2*Math.PI)));
-			 		count--;
-			 		
-			 	}
+				//if(!c.lock & yROADLOCK) {
+					placeTerrain(c, floor);
+				 	let q = randIntExclusive(0, 3);
+				 	if(q == 1) {
+				 		g_Map.placeEntityPassable(pickRandom(trees), 0, c, randFloat(0, 2*Math.PI));
+				 		count--;
+				 		
+				 	}
+				//}
 			}
 		}
 	}
@@ -878,7 +921,7 @@ YAbstractPatchPlacer.prototype.expandZone = function(zone,count) {
 	this.zone = [];
 	this.border = [];
 	
-	if(points[0].z != undefined) {
+	if(zone[0].z != undefined) {
 		let zonea = zone;
 		zone = [];
 		for(let p of zonea) {
@@ -886,7 +929,7 @@ YAbstractPatchPlacer.prototype.expandZone = function(zone,count) {
 		}
 		zonea = null;
 	}
-	
+	//warn("zone: "+zone.length);
 	for(let pt of zone) {
 		cx += pt.x;
 		cy += pt.y;
@@ -894,21 +937,21 @@ YAbstractPatchPlacer.prototype.expandZone = function(zone,count) {
 		it.lock |= yZONELOCK;		
 	}
 	g_TOMap.heap.resetHeap();
-	let it = null;
 	this.barx = Math.floor(cx / zone.length);
 	this.bary = Math.floor(cy / zone.length);
 	if((this.sx == 0) && (this.sy == 0)) {
 		this.sx = zone[0].x;
 		this.sy = zone[0].y;
-		it = g_TOMap.gCells[sx][sy];
-	} else {
-		it = g_TOMap.gCells[this.sx][this.sy];
 	}
+	let it = g_TOMap.gCells[this.sx][this.sy];
+	//warn("it: "+it.x+","+it.y);
+	
 	it.key = 1;
 	this.card = 0;
 	g_TOMap.heap.addCell(it);
 	while(g_TOMap.heap.getSize() > 0) {
 		let cell = g_TOMap.heap.pickCell();
+		//warn("cell: "+cell.x+","+cell.y);
 		let b = 0;
 		for(let ne of cell) {
 			if(ne.lock & yZONELOCK) {
@@ -924,7 +967,7 @@ YAbstractPatchPlacer.prototype.expandZone = function(zone,count) {
 		this.card++;
 	}
 	let unlock = ~ yZONELOCK;
-	for(let p of zone)
+	for(let p of this.zone)
 		p.lock &= unlock;
 	this.count = count;
 	if(count > 0) {
@@ -1082,11 +1125,18 @@ YPatchPlacer.prototype.explore = function() {
  }
 
 //===================== utilities ======================
+ function placeTerrain(cell,terrain) {
+		if(typeof terrain == "string")
+			g_Map.setTexture(cell, terrain);
+		else
+			g_Map.setTexture(cell, pickRandom(terrain));
+	}
+
  function paintPointsArray(zone,terrain)
  {
  	for (let cell of zone)
  	{
- 		placeTerrain(cell.x, cell.y, terrain);
+ 		placeTerrain(cell, terrain);
  	}
  }
 
@@ -1101,4 +1151,3 @@ YPatchPlacer.prototype.explore = function() {
  	    }
  	 }
  }
-

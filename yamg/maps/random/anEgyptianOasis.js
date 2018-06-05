@@ -6,9 +6,10 @@
  *  
  */
 
-RMS.LoadLibrary("rmgen");
-RMS.LoadLibrary("heightmap");
-RMS.LoadLibrary("yamg");
+Engine.LoadLibrary("rmgen");
+Engine.LoadLibrary("heightmap");
+Engine.LoadLibrary("rmgen-common");
+Engine.LoadLibrary("yamg");
 
 //========= terrains
 
@@ -22,23 +23,24 @@ const treeList = ["gaia/flora_tree_acacia", "gaia/flora_tree_tamarix", "gaia/flo
 const tWater = ["desert_sand_wet"];
 const tBase = "desert_city_tile_plaza";
 const tRoad = "desert_city_tile";
+//const tRoad = "cave_walls";
 
 const oPine = "gaia/flora_tree_cretan_date_palm_short";
 const oBerryBush = "gaia/flora_tree_olive";
 const aGrassShort = "actor|props/flora/grass_soft_large.xml";
 
 const oStoneLarge = "gaia/geology_stonemine_desert_quarry";
-const oBadGeol = ["gaia/geology_stonemine_desert_badlands_quarry","gaia/geology_metal_desert_badlands_slabs"];
+const oBadGeol = ["actor|geology/stonemine_desert_badlands_quarry.xml","actor|geology/metalmine_desert_badlands_slabs.xml"];
 const oStoneSmall = "gaia/geology_stone_tropic_a";
 const oMetalLarge = "gaia/geology_metal_desert_slabs";
 const oAnimals = ["gaia/fauna_camel","gaia/fauna_elephant_north_african"];
 const gateList = ["gaia/flora_bush_badlands","gaia/flora_bush_badlands","gaia/flora_tree_poplar_lombardy","gaia/flora_tree_senegal_date_palm"];
 
 //=========== standard map initialization ============
-InitMap();
+var g_Map = new RandomMap(0,tWild);
 
 var numPlayers = getNumPlayers();
-var mapSize = getMapSize();
+var mapSize = g_MapSettings.Size;
 
 /**
  * This loop is needed because some maps may be unplayble because
@@ -122,32 +124,32 @@ for (let ix = 0; ix < mapSize; ix++) {
 	{
 		switch(g_TOMap.gCells[ix][iz].terrain) {
 			case 'wild':
-				placeTerrain(ix, iz, tWild);
+				placeTerrain(g_TOMap.gCells[ix][iz], tWild);
 				break;
 			case 'wildm':
-				placeTerrain(ix, iz, tWildm);
+				placeTerrain(g_TOMap.gCells[ix][iz], tWildm);
 				break;
 			case 'cliff':
 			case 'cliffm':
-				placeTerrain(ix, iz, tCliff);
+				placeTerrain(g_TOMap.gCells[ix][iz], tCliff);
 				break;
 			case 'field':
-				placeTerrain(ix, iz, tField);
+				placeTerrain(g_TOMap.gCells[ix][iz], tField);
 				break;
 			case 'water':
-				placeTerrain(ix, iz, tWater);
+				placeTerrain(g_TOMap.gCells[ix][iz], tWater);
 				break;
 			case 'infl':
-				placeTerrain(ix, iz, tInfl);
+				placeTerrain(g_TOMap.gCells[ix][iz], tInfl);
 				break;
 			case 'road':
-				placeTerrain(ix, iz, tRoad);
+				placeTerrain(g_TOMap.gCells[ix][iz], tRoad);
 				break;
 			case 'road2':
-				placeTerrain(ix, iz, tRoad2);
+				placeTerrain(g_TOMap.gCells[ix][iz], tRoad2);
 				break;
 			default:
-				placeTerrain(ix, iz, "cave_walls");
+				placeTerrain(g_TOMap.gCells[ix][iz], "cave_walls");
 				break;
 		}
 	}
@@ -169,82 +171,84 @@ for (var i = 0; i < numPlayers; i++)
 }
 playerIDs = sortPlayers(playerIDs);
 var radius = scaleByMapSize(15,25);
-var clBaseResource = createTileClass();
+var clBaseResource = g_Map.createTileClass();
 
 for(let i = 0; i < mapSize; i++) {
 	for(let j = 0; j < mapSize; j++) {
 		if(g_TOMap.gCells[i][j].lock & yROADLOCK)
-			addToClass(i, j, clBaseResource);
+			clBaseResource.add(g_TOMap.gCells[i][j]);
 	}
 }
 
 for (var i = 0; i < numPlayers; i++)
 {
 	var id = playerIDs[i];
-	log("Creating base for player " + id + "...");
 	let fx = patches[i].barx;
 	let fz = patches[i].bary;
+	let pos = new Vector2D(fx, fz);
 	
 	let placer = new YPatchPlacer(fx,fz,280,0,1.5,waterHeight + 2,32000,1.1,1,0,10,0,0);
 	paintPointsArray(placer.find(),tBase);
 	// create starting units
-	placeCivDefaultEntities(fx, fz, id);
+
+	placeStartingEntities(pos, id, getStartingEntities(id));
 	
 	let av = new AvoidTileClassConstraint(clBaseResource,2);
 
-	placeDefaultChicken(fx, fz, clBaseResource,av);
 
 	// create berry bushes
-	var bbAngle = randFloat(0, TWO_PI);
+	var bbAngle = randFloat(0, Math.PI * 2);
 	var bbDist = 12;
-	var bbX = round(fx + bbDist * cos(bbAngle));
-	var bbZ = round(fz + bbDist * sin(bbAngle));
+	var bbX = Math.round(fx + bbDist * Math.cos(bbAngle));
+	var bbZ = Math.round(fz + bbDist * Math.sin(bbAngle));
 	var group = new SimpleGroup(
 		[new SimpleObject(oBerryBush, 5,5, 0,3)],
-		true, clBaseResource, bbX, bbZ
+		true, clBaseResource, new Vector2D(bbX, bbZ)
 	);
 	createObjectGroup(group, 0,av);
+		
 
 	// create metal mine
 	var mAngle = bbAngle;
-	while(abs(mAngle - bbAngle) < PI/3)
+	while(Math.abs(mAngle - bbAngle) < Math.PI/3)
 	{
-		mAngle = randFloat(0, TWO_PI);
+		mAngle = randFloat(0, Math.PI * 2);
 	}
 	var mDist = 13;
-	var mX = round(fx + mDist * cos(mAngle));
-	var mZ = round(fz + mDist * sin(mAngle));
+	var mX = Math.round(fx + mDist * Math.cos(mAngle));
+	var mZ = Math.round(fz + mDist * Math.sin(mAngle));
 	group = new SimpleGroup(
 		[new SimpleObject(oMetalLarge, 1,1, 0,0)],
-		true, clBaseResource, mX, mZ
+		true, clBaseResource, new Vector2D(mX, mZ)
 	);
 	createObjectGroup(group, 0,av);
 
 	// create stone mines
-	mAngle += randFloat(PI/8, PI/4);
-	mX = round(fx + mDist * cos(mAngle));
-	mZ = round(fz + mDist * sin(mAngle));
+	mAngle += randFloat(Math.PI/8, Math.PI/4);
+	mX = Math.round(fx + mDist * Math.cos(mAngle));
+	mZ = Math.round(fz + mDist * Math.sin(mAngle));
 	group = new SimpleGroup(
 		[new SimpleObject(oStoneLarge, 1,1, 0,2)],
-		true, clBaseResource, mX, mZ
+		true, clBaseResource, new Vector2D(mX, mZ)
 	);
 	createObjectGroup(group, 0,av);
 	
-	var hillSize = PI * radius * radius;
+	var hillSize = Math.PI * radius * radius;
 	// create starting trees
-	var num = floor(hillSize / 100);
-	var tAngle = randFloat(-PI/3, 4*PI/3);
+	var num = Math.floor(hillSize / 100);
+	var tAngle = randFloat(-Math.PI/3, 4*Math.PI/3);
 	var tDist = randFloat(11, 13);
-	var tX = round(fx + tDist * cos(tAngle));
-	var tZ = round(fz + tDist * sin(tAngle));
+	var tX = Math.round(fx + tDist * Math.cos(tAngle));
+	var tZ = Math.round(fz + tDist * Math.sin(tAngle));
 	group = new SimpleGroup(
 		[new SimpleObject(oPine, num, num, 0,5)],
-		false, clBaseResource, tX, tZ
+		false, clBaseResource, new Vector2D(tX, tZ)
 	);
 	createObjectGroup(group, 0, avoidClasses(clBaseResource,2));
-
+/*
+	placeDefaultChicken(fx, fz, clBaseResource,av);
 	placeDefaultDecoratives(fx, fz, aGrassShort, clBaseResource, radius,av);
-
+*/
 }
 
 
@@ -252,7 +256,7 @@ for (var i = 0; i < numPlayers; i++)
 for(let p of patches){
 	for(let cell of p.border){
 		if(!cell.done && (cell.terrain != "road") && (randIntExclusive(0,4) > 0)) {
-			g_Map.addObject(new Entity(pickRandom(gateList), 0, cell.x, cell.y, 0));
+			g_Map.placeEntityPassable(pickRandom(gateList), 0, cell, 0);
 			cell.done = true;
 		}
 	}
@@ -303,10 +307,10 @@ zone = g_TOMap.getZoneAlt(hMini,hMiddle,"wildm");
 if(zone.length > 0) {
 // ------------ bushes on mountains
 	let placer = new YPatchPlacer(0,0,0,0,5,waterHeight + 1,hMiddle,0.8,5,2,2,0,yFORESTLOCK);
-	g_TOMap.putRandFlock(zone,mapSize * 2,mapSize / 4,200,"gaia/flora_bush_badlands",placer);
+	g_TOMap.putRandFlock(zone,mapSize * 2,mapSize / 4,200,"actor|props/flora/bush_desert_a.xml",placer);
 
 	g_TOMap.putLargeEntities(zone,Math.floor(mapSize / 40),200,oBadGeol,yLOCKALL); // stone mine
 }
 
 // Export map data at last.
-ExportMap();
+g_Map.ExportMap();

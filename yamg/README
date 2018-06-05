@@ -7,42 +7,14 @@ It contains a library split in two files:
 	- placers.js: contains various utilities to create roads, define regions and borders.
 Both parts of the library are independant and can be used separately.
 
-A random map script "Egyptian Oasis" is provided as well.
+A random map script "An Egyptian Oasis" is provided as well.
 
 Upgrade note.
 -------------
-This version is for alpha-22, but can be easily upgraded to alpha-23.
-	- of course, modifying the dependency in the 'mod.json' file.
-	- The library itself don't call anything in rmgen, and work only with a proprietary tiles map.
-A problem may arise when using the placers from a script written for alpha-23 (Not the Egyptian Oasis which don't call place() method). For now, the place() method of placers returns a PointXZ array, but through a convenience function located at the beginning of the 'placers.js' file:
+This version is for alpha-23 only.
+The various fractal painters conform to painter interface in rmgen, so can be used in rmgen calls.
 
-/**
- * This function extracts a points array from a zone (which is a cells array)
- * Mainly to help rmgen compatibility. Change this to Vector2D if desired, it's the only reference to PointXZ in the library 
- */
-function zoneToPoints(zone)
-{
-	let points = [];
-	for(let c of zone) {
-		points.push(new PointXZ(c.x,c.y)); // change this to points.push(new Vector2D(c.x,c.y)); if Vector2D is preferred.
-	}
-	return points;
-}
-
-/**
- * This function extracts a zone (which is a cells array) from a point array
- * Mainly to help rmgen compatibility.
- */
-function pointsToZone(points)
-{
-	let zone = [];
-	for(let p of points) {
-		zone.push(g_TOMap.gCells(p.x,p.z)); // change this to zone.push(g_TOMap.gCells(p.x,p.y)); if Vector2D is preferred.
-	}
-	return points;
-}
-
-The library and the Egyptian Oasis don't use any point object, and should upgrade nicely.
+The placer and utilities are rmgen compatible too but use a Cell object and a g_TOMap special cell map rmgen knows nothing of. So, you must create the g_TOMap object before using these utilities. Anyway, cells objects inherit from Vector2D which means you can use them in rmgen calls which requires a 'position' parameter or build Cell arrays which can be used to create Areas for instance.
 
 Have fun !
 

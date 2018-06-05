@@ -3,7 +3,7 @@
 * 
 * author: Pyrophorus
 * 
-* alpha 3 : february 2018
+* alpha 4 : June 2018
 *
 */
 
@@ -17,7 +17,6 @@ const yHISTOSIZE = 10000;
  * 
  * It cames in four flavors which differ only in the way the temporary fractal map is merged into the exisiting map.
  * 
- * @param area : the area to be modified (a PointXZ or Vector2D array)
  * @param centerHeight : the desired height of the center of the region
  * @param bump : defines the range of height the painter will produce
  * @param rough : defines how chaotic the terrain will be.
@@ -28,8 +27,7 @@ const yHISTOSIZE = 10000;
  */
 
 
-function AbstractFractalPainter(area,centerHeight,bump,rough,progress) {
-	this.region = area;
+function AbstractFractalPainter(centerHeight,bump,rough,progress) {
 	this.centerHeight = centerHeight;
 	this.bump = bump;
 	this.rough = rough;
@@ -40,16 +38,6 @@ function AbstractFractalPainter(area,centerHeight,bump,rough,progress) {
 
 AbstractFractalPainter.prototype = {
 	maps: function() {
-		// convert PointXZ to Vector2D if needed
-		let pt = this.region[0];
-		
-		if(pt.z != undefined) {
-			let tmp = [];
-			for(let p of this.region)
-				tmp.push({x:p.x,y:p.z});
-			this.region = tmp;
-			tmp = null;
-		}
 
 		// 1- find the bounding box of the area
 		let xmin = 64000; let ymin = 64000; let xmax = 0; let ymax = 0;
@@ -176,24 +164,25 @@ AbstractFractalPainter.prototype = {
 /**
  * Designed to create a mountain bump on the area.
  * 
- * @param area : the region to modify
  * @param centerHeight : height of the region center, for best results, should be higher than the area.
  * @param bump: see the parent class.
  * @param rough
  * @param progress
  * @returns
  */
-function YFractalPainter(area,centerHeight,bump,rough,progress) {
-	AbstractFractalPainter.call(this,area,centerHeight,bump,rough,progress);
+function YFractalPainter(centerHeight,bump,rough,progress) {
+	AbstractFractalPainter.call(this,centerHeight,bump,rough,progress);
 }
 YFractalPainter.prototype = Object.create(AbstractFractalPainter.prototype); // Javacsript voodoo: creates inheritance
 
 /**
  * The paint method does the job.
  * 
+ * @param area : the area to modify
  * @param : nochiasm, boolean stating if only the map parts lower than temporary map should be modified (default)
  */
-YFractalPainter.prototype.paint = function(nochiasm = true) {
+YFractalPainter.prototype.paint = function(area,nochiasm = true) {
+	this.region = area.getPoints();
 	let res = this.maps();
 	let depx = res[0];
 	let depy = res[1];
@@ -212,15 +201,14 @@ YFractalPainter.prototype.paint = function(nochiasm = true) {
 /**
  * Designed to create cracks and hole on the area.
  * 
- * @param area : the region to modify
  * @param centerHeight : height of the region center, for best results, should be lower than the area.
  * @param bump
  * @param rough
  * @param progress
  * @returns
  */
-function YCracksPainter(area,centerHeight,bump,rough,progress) {
-	AbstractFractalPainter.call(this,area,centerHeight,bump,rough,progress);
+function YCracksPainter(centerHeight,bump,rough,progress) {
+	AbstractFractalPainter.call(this,centerHeight,bump,rough,progress);
 }
 
 YCracksPainter.prototype = Object.create(AbstractFractalPainter.prototype);
@@ -228,9 +216,11 @@ YCracksPainter.prototype = Object.create(AbstractFractalPainter.prototype);
 /**
  * The paint method does the job.
  * 
+ * @param area : the area to modify
  * @param : nochiasm, boolean stating if only the map parts higher than temporary map should be modified (default)
  */
-YCracksPainter.prototype.paint = function(nochiasm = true) {
+YCracksPainter.prototype.paint = function(area,nochiasm = true) {
+	this.region = area.getPoints();
 	let res = this.maps();
 	let depx = res[0];
 	let depy = res[1];
@@ -249,15 +239,14 @@ YCracksPainter.prototype.paint = function(nochiasm = true) {
 /**
  * Designed to create cliffs whose summit is flat (mesas).
  * 
- * @param area : the region to modify
  * @param centerHeight : height of the region center, for best results, should be higher than the area.
  * @param bump
  * @param rough
  * @param progress
  * @param mesa : height of the summits.
  */
-function YMesaPainter(area,centerHeight,bump,rough,progress,mesa) {
-	AbstractFractalPainter.call(this,area,centerHeight,bump,rough,progress);
+function YMesaPainter(centerHeight,bump,rough,progress,mesa) {
+	AbstractFractalPainter.call(this,centerHeight,bump,rough,progress);
 	this.mesa = mesa;
 }
 
@@ -266,9 +255,11 @@ YMesaPainter.prototype = Object.create(AbstractFractalPainter.prototype);
 /**
  * The paint method does the job.
  * 
+ * @param area : the area to modify
  * @returns : creates a 'flat' region containing the summits of the mesas
 */
-YMesaPainter.prototype.paint = function() {
+YMesaPainter.prototype.paint = function(area) {
+	this.region = area.getPoints();
 	let res = this.maps();
 	let depx = res[0];
 	let depy = res[1];
@@ -283,7 +274,8 @@ YMesaPainter.prototype.paint = function() {
 		let h = 0;
 		
 		if(this.tMap[xg][yg] > this.mesa) {
-			this.flat.push({x:pt.x,y:pt.y,z:pt.y});	// g_TOMap.gCells[pt.x][pt.y]
+			this.flat.push(new Vector2D(pt.x,pt.y));
+			//this.flat.push(g_TOMap.gCells[pt.x][pt.y]);
 			h = this.mesa;
 		} else
 			h = this.tMap[xg][yg];
@@ -297,15 +289,14 @@ YMesaPainter.prototype.paint = function() {
 /**
  * Designed to create depressions whose bottom is flat.
  * 
- * @param area : the region to modify
  * @param centerHeight : height of the region center, for best results, should be lower than the area.
  * @param bump
  * @param rough
  * @param progress
  * @param mesa : height of the bottom.
  */
-function YDepressionPainter(area,centerHeight,bump,rough,progress,floor) {
-	AbstractFractalPainter.call(this,area,centerHeight,bump,rough,progress);
+function YDepressionPainter(centerHeight,bump,rough,progress,floor) {
+	AbstractFractalPainter.call(this,centerHeight,bump,rough,progress);
 	this.floor = floor;
 }
 YDepressionPainter.prototype = Object.create(AbstractFractalPainter.prototype);
@@ -313,9 +304,11 @@ YDepressionPainter.prototype = Object.create(AbstractFractalPainter.prototype);
 /**
  * The paint method does the job.
  * 
+ * @param area : the area to modify
  * @returns : creates a 'flat' region containing the bottoms of the mesas
 */
-YDepressionPainter.prototype.paint = function() {
+YDepressionPainter.prototype.paint = function(area) {
+	this.region = area.getPoints();
 	let res = this.maps();
 	let depx = res[0];
 	let depy = res[1];
@@ -330,7 +323,8 @@ YDepressionPainter.prototype.paint = function() {
 		let h = 0;
 		
 		if(this.tMap[xg][yg] < this.floor) {
-			this.flat.push({x:pt.x,y:pt.y,z:pt.y});	// g_TOMap.gCells[pt.x][pt.y]
+			this.flat.push(new Vector2D(pt.x,pt.y));
+			//this.flat.push(g_TOMap.gCells[pt.x][pt.y]);
 			h = this.floor;
 		} else
 			h = this.tMap[xg][yg];
@@ -822,3 +816,30 @@ HeightArray.prototype.newMap = function(tBump = 370,baselevel = 50,seaRatio = 10
 	let waterHeight = i / 10;
 	return [waterHeight,snowLimit,hMaxi,hMini,hMiddle,monts];
 }
+
+/**
+ * Smoothens the entire map
+ * @param {float} [strength=0.8] - How strong the smooth effect should be: 0 means no effect at all, 1 means quite strong, higher values might cause interferences, better apply it multiple times
+ * @param {array} [heightmap=g_Map.height] - The heightmap to be smoothed
+ * @param {array} [smoothMap=[[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]]] - Array of offsets discribing the neighborhood tiles to smooth the height of a tile to
+ */
+function globalSmoothHeightmap(strength = 0.8, heightmap = g_Map.height, smoothMap = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]])
+{
+	let referenceHeightmap = clone(heightmap);
+	let max_x = heightmap.length;
+	let max_y = heightmap[0].length;
+	for (let x = 0; x < max_x; ++x)
+	{
+		for (let y = 0; y < max_y; ++y)
+		{
+			for (let i = 0; i < smoothMap.length; ++i)
+			{
+				let mapX = x + smoothMap[i][0];
+				let mapY = y + smoothMap[i][1];
+				if (mapX >= 0 && mapX < max_x && mapY >= 0 && mapY < max_y)
+					heightmap[x][y] += strength / smoothMap.length * (referenceHeightmap[mapX][mapY] - referenceHeightmap[x][y]);
+			}
+		}
+	}
+}
+
