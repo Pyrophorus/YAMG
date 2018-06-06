@@ -41,6 +41,7 @@ AbstractFractalPainter.prototype = {
 
 		// 1- find the bounding box of the area
 		let xmin = 64000; let ymin = 64000; let xmax = 0; let ymax = 0;
+		let mapSize = g_MapSettings.Size;
 
 		for (let pt of this.region)
 		{
@@ -162,9 +163,9 @@ AbstractFractalPainter.prototype = {
 };
 
 /**
- * Designed to create a mountain bump on the area.
+ * Designed to create mountains and cracks on the area.
  * 
- * @param centerHeight : height of the region center, for best results, should be higher than the area.
+ * @param centerHeight : desired height of the region center.
  * @param bump: see the parent class.
  * @param rough
  * @param progress
@@ -192,7 +193,41 @@ YFractalPainter.prototype.paint = function(area,nochiasm = true) {
 	{
 		let xg = pt.x - depx;
 		let yg = pt.y - depy;
-		if(nochiasm && (g_Map.height[pt.x][pt.y] > this.tMap[xg][yg]))
+		g_Map.height[pt.x][pt.y] = this.tMap[xg][yg];
+	}	
+}
+
+/**
+ * Designed to create a mountain bump on the area.
+ * 
+ * @param centerHeight : height of the region center, for best results, should be higher than the initial area.
+ * @param bump: see the parent class.
+ * @param rough
+ * @param progress
+ * @returns
+ */
+function YHillPainter(centerHeight,bump,rough,progress) {
+	AbstractFractalPainter.call(this,centerHeight,bump,rough,progress);
+}
+YHillPainter.prototype = Object.create(AbstractFractalPainter.prototype); // Javacsript voodoo: creates inheritance
+
+/**
+ * The paint method does the job.
+ * 
+ * @param area : the area to modify
+ */
+YHillPainter.prototype.paint = function(area) {
+	this.region = area.getPoints();
+	let res = this.maps();
+	let depx = res[0];
+	let depy = res[1];
+	
+	// 6 - back to the g_Map
+	for (let pt of this.region)
+	{
+		let xg = pt.x - depx;
+		let yg = pt.y - depy;
+		if(g_Map.height[pt.x][pt.y] > this.tMap[xg][yg])
 			continue;
 		g_Map.height[pt.x][pt.y] = this.tMap[xg][yg];
 	}	
@@ -217,7 +252,6 @@ YCracksPainter.prototype = Object.create(AbstractFractalPainter.prototype);
  * The paint method does the job.
  * 
  * @param area : the area to modify
- * @param : nochiasm, boolean stating if only the map parts higher than temporary map should be modified (default)
  */
 YCracksPainter.prototype.paint = function(area,nochiasm = true) {
 	this.region = area.getPoints();
@@ -230,7 +264,7 @@ YCracksPainter.prototype.paint = function(area,nochiasm = true) {
 	{
 		let xg = pt.x - depx;
 		let yg = pt.y - depy;
-		if(nochiasm && (g_Map.height[pt.x][pt.y] < this.tMap[xg][yg]))
+		if(g_Map.height[pt.x][pt.y] < this.tMap[xg][yg])
 			continue;
 		g_Map.height[pt.x][pt.y] = this.tMap[xg][yg];
 	}	
