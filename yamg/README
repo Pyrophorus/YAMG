@@ -14,7 +14,16 @@ Upgrade note.
 This version is for alpha-23 only.
 The various fractal painters conform to painter interface in rmgen, so can be used in rmgen calls.
 
-The placer and utilities are rmgen compatible too but use a Cell object and a g_TOMap special cell map rmgen knows nothing of. So, you must create the g_TOMap object before using these utilities. Anyway, cells objects inherit from Vector2D which means you can use them in rmgen calls which requires a 'position' parameter or build Cell arrays which can be used to create Areas for instance.
+The placer and utilities are rmgen compatible too but use a Cell object and a g_TOMap special cell map rmgen knows nothing of. So, you must create the g_TOMap object before using these utilities. Anyway, cells objects inherit from Vector2D which means you can use them in rmgen calls which requires a 'position' parameter or build Cell arrays.
+
+IMPORTANT WARNING
+-----------------
+Even if you can use cells objects instead of Vector2D when using rmgen functions, you MUST NOT pass a cell array to the Area constructor. The reason is this constructor makes read-only the cell objects it deals with. The call will succeed, but later, every yamg attempt to write those frozen objects will raise a fatal error.
+A solution maybe found in the future, but for now, if you need to create an Area from a cell array (for instance the border provided by the YPatchPlacer), you must pass a Vector2D array duplicating this cell array to prevent unwanted modifications. The 'zoneToPoints()' function does this for you.
+Instead of: new Area(some_Cell_Array); use new Area(zoneToPoints(some_Cell_Array));
+
+Note the place() method of YPatchPlacer does this, so it's safe to use it in a createArray call (which obviously invokes Area constructor).
+
 
 Have fun !
 

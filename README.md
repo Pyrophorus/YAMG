@@ -14,5 +14,9 @@ Upgrade note.
 -------------
 This version is for alpha-23 only.
 
+WARNING
+-------
+There is a compatibility problem with a part of rmgen library. See the README for details.
+
 Have fun !
 

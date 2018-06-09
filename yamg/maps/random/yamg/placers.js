@@ -33,13 +33,13 @@ const ySLOPELIM = 4; // slope limit between cliffs and flat terrain
 
 /**
  * This function extracts a points array from a zone (which is a cells array)
- * Mainly to help rmgen compatibility. Change this to Vector2D if desired, it's the only reference to PointXZ in the library 
+ * Mainly to help rmgen compatibility. 
  */
 function zoneToPoints(zone)
 {
 	let points = [];
 	for(let c of zone) {
-		points.push(new PointXZ(c.x,c.y));
+		points.push(new Vector2D(c.x,c.y));
 	}
 	return points;
 }
@@ -51,15 +51,9 @@ function zoneToPoints(zone)
 function pointsToZone(points)
 {
 	let zone = [];
-	if(points[0].z != undefined) {
-		for(let p of points) {
-			zone.push(g_TOMap.gCells[p.x][p.z]);
-		}
-	} else {
-		for(let p of points) {
-			zone.push(g_TOMap.gCells[p.x][p.y]);
-		}		
-	}
+	for(let p of points) {
+		zone.push(g_TOMap.gCells[p.x][p.y]);
+	}		
 	return zone;
 }
 
